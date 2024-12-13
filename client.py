@@ -34,13 +34,10 @@ class MCPClient:
         )
 
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        print("after stdio_transport")
         self.stdio, self.write = stdio_transport
         self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
-        print("after session")
 
         await self.session.initialize()
-        print("after initialize")
 
         # List available tools
         response = await self.session.list_tools()
@@ -67,14 +64,11 @@ class MCPClient:
             },
         } for tool in response.tools]
 
-        print(f"Available tools: {available_tools}")
         response = self.client.chat(
             model="llama3.1",
             messages=messages,
             tools=available_tools
         )
-
-        print(f"Initial response: {response}")
 
         # Process response and handle tool calls
         tool_results = []
@@ -92,7 +86,6 @@ class MCPClient:
                 tool_results.append({"call": tool_name, "result": result})
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
-                print(f"Tool result: {result}")
                 # Continue conversation with tool results
                 messages.append({
                     "role": "user",
