@@ -1,4 +1,3 @@
-import asyncio
 from typing import Optional
 from contextlib import AsyncExitStack
 
@@ -14,6 +13,7 @@ class OllamaMCPClient(AbstractMCPClient):
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.client = Client()
+        self.tools = []
 
 
     async def connect_to_server(self, server_script_path: str):
@@ -42,8 +42,15 @@ class OllamaMCPClient(AbstractMCPClient):
 
         # List available tools
         response = await self.session.list_tools()
-        tools = response.tools
-        print("\nConnected to server with tools:", [tool.name for tool in tools])
+        self.tools = [{
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.inputSchema
+                    },
+                } for tool in response.tools]
+        print("\nConnected to server with tools:", [tool.name for tool in self.tools])
 
 
     async def process_query(self, query: str) -> str:
@@ -55,20 +62,10 @@ class OllamaMCPClient(AbstractMCPClient):
             }
         ]
 
-        response = await self.session.list_tools()
-        available_tools = [{
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema
-            },
-        } for tool in response.tools]
-
         response = self.client.chat(
             model="llama3.1",
             messages=messages,
-            tools=available_tools
+            tools=self.tools,
         )
 
         # Process response and handle tool calls
@@ -123,20 +120,3 @@ class OllamaMCPClient(AbstractMCPClient):
     async def cleanup(self):
         """Clean up resources"""
         await self.exit_stack.aclose()
-
-async def main():
-    if len(sys.argv) < 2:
-        print("Usage: python client.py <path_to_server_script>")
-        sys.exit(1)
-
-    client = MCPClient()
-    print("client initiated")
-    try:
-        await client.connect_to_server(sys.argv[1])
-        await client.chat_loop()
-    finally:
-        await client.cleanup()
-
-if __name__ == "__main__":
-    import sys
-    asyncio.run(main())
