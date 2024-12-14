@@ -9,6 +9,12 @@ Only supports stdio transport for now.
 
 ## Usage
 
+Install the package in development mode:
+
+```bash
+pip install -e .
+```
+
 ```python
-uv run client.py /path/to/server.py
+uv run examples/ollama_example.py /path/to/server.py
 ```
