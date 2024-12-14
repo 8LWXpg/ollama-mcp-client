@@ -50,7 +50,7 @@ class OllamaMCPClient(AbstractMCPClient):
                         "parameters": tool.inputSchema
                     },
                 } for tool in response.tools]
-        print("\nConnected to server with tools:", [tool.name for tool in self.tools])
+        print("\nConnected to server with tools:", [tool["function"]["name"] for tool in self.tools])
 
 
     async def process_query(self, query: str) -> str:
