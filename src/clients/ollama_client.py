@@ -4,6 +4,7 @@ from mcp.client.stdio import stdio_client
 from ollama import Client
 from src.abstract.base_client import AbstractMCPClient
 
+
 class OllamaMCPClient(AbstractMCPClient):
     def __init__(self):
         # Initialize session and client objects
@@ -12,52 +13,50 @@ class OllamaMCPClient(AbstractMCPClient):
         self.client = Client()
         self.tools = []
 
-
     async def connect_to_server(self, server_script_path: str):
         """Connect to an MCP server
 
         Args:
-            server_script_path: Path to the server script (.py or .js)
+            server_script_path: Path to the server script (.py)
         """
-        is_python = server_script_path.endswith('.py')
-        is_js = server_script_path.endswith('.js')
-        if not (is_python or is_js):
+        if not server_script_path.endswith(".py"):
             raise ValueError("Server script must be a .py or .js file")
 
-        command = "python" if is_python else "node"
         server_params = StdioServerParameters(
-            command=command,
-            args=[server_script_path],
-            env=None
+            command="uv", args=["run", server_script_path], env=None
         )
 
-        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+        stdio_transport = await self.exit_stack.enter_async_context(
+            stdio_client(server_params)
+        )
         self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+        self.session = await self.exit_stack.enter_async_context(
+            ClientSession(self.stdio, self.write)
+        )
 
         await self.session.initialize()
 
         # List available tools
         response = await self.session.list_tools()
-        self.tools = [{
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.inputSchema
-                    },
-                } for tool in response.tools]
-        print("\nConnected to server with tools:", [tool["function"]["name"] for tool in self.tools])
-
+        self.tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
+                },
+            }
+            for tool in response.tools
+        ]
+        print(
+            "\nConnected to server with tools:",
+            [tool["function"]["name"] for tool in self.tools],
+        )
 
     async def process_query(self, query: str) -> str:
         """Process a query using LLM and available tools"""
-        messages = [
-            {
-                "role": "user",
-                "content": query
-            }
-        ]
+        messages = [{"role": "user", "content": query}]
 
         response = self.client.chat(
             model="llama3.1",
@@ -82,10 +81,7 @@ class OllamaMCPClient(AbstractMCPClient):
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
                 # Continue conversation with tool results
-                messages.append({
-                    "role": "user",
-                    "content": result.content[0].text
-                })
+                messages.append({"role": "user", "content": result.content[0].text})
 
                 response = self.client.chat(
                     model="llama3.1",
@@ -105,7 +101,7 @@ class OllamaMCPClient(AbstractMCPClient):
             try:
                 query = input("\nQuery: ").strip()
 
-                if query.lower() == 'quit':
+                if query.lower() == "quit":
                     break
 
                 response = await self.process_query(query)
