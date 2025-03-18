@@ -11,10 +11,13 @@ Only supports stdio transport for now.
 
 Install the package in development mode:
 
-```bash
-pip install -e .
+```shell
+git clone https://github.com/anjor/ollama-mcp-client.git
+cd ollama-mcp-client
+uv venv
+uv pip install -e .
 ```
 
-```python
-uv run examples/ollama_example.py /path/to/server.py
+```shell
+uv run examples/ollama_example.py server/server.py
 ```
