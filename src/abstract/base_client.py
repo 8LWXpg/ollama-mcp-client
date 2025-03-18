@@ -3,6 +3,7 @@ from typing import Optional
 from contextlib import AsyncExitStack
 from mcp import ClientSession
 
+
 class AbstractMCPClient(ABC):
     """Abstract base class for MCP clients"""
 
@@ -11,12 +12,12 @@ class AbstractMCPClient(ABC):
         self.exit_stack = AsyncExitStack()
 
     @abstractmethod
-    async def connect_to_server(self, server_script_path: str) -> None:
+    async def connect_to_server(self, commandline: list[str]) -> None:
         """
         Connect to an MCP server
 
         Args:
-            server_script_path: Path to the server script
+            commandline: commandline to execute MCP server
         """
         pass
 

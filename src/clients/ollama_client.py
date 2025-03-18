@@ -13,17 +13,17 @@ class OllamaMCPClient(AbstractMCPClient):
         self.client = Client()
         self.tools = []
 
-    async def connect_to_server(self, server_script_path: str):
+    async def connect_to_server(self, commandline: list[str]):
         """Connect to an MCP server
 
         Args:
             server_script_path: Path to the server script (.py)
         """
-        if not server_script_path.endswith(".py"):
-            raise ValueError("Server script must be a .py or .js file")
+        # if not commandline.endswith(".py"):
+        #     raise ValueError("Server script must be a .py or .js file")
 
         server_params = StdioServerParameters(
-            command="uv", args=["run", server_script_path], env=None
+            command=commandline[0], args=commandline[1:], env=None
         )
 
         stdio_transport = await self.exit_stack.enter_async_context(
