@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, AsyncIterator
 from contextlib import AsyncExitStack
 from mcp import ClientSession
 
@@ -22,7 +22,7 @@ class AbstractMCPClient(ABC):
         pass
 
     @abstractmethod
-    async def process_query(self, query: str) -> str:
+    async def process_query(self, query: str) -> AsyncIterator[str]:
         """
         Process a query using LLM and available tools
 
