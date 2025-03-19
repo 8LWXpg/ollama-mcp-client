@@ -4,7 +4,7 @@ from mcp.client.stdio import stdio_client
 from ollama import AsyncClient
 from src.abstract.base_client import AbstractMCPClient
 
-from typing import Any, AsyncIterator, Sequence, Optional, Tuple
+from typing import Any, AsyncIterator, Sequence
 from ollama import Message
 
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat. Use the responses from these function calls to provide accurate and informative answers. The answers should be natural and hide the fact that you are using tools to access real-time information. Guide the user about available tools and their capabilities. Always utilize tools to access real-time information when required. Engage in a friendly manner to enhance the chat experience.
@@ -39,10 +39,10 @@ class OllamaMCPClient(AbstractMCPClient):
         self.stdio, self.write = stdio_transport
         self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
 
-        await self.session.initialize()
+        await self.session.initialize()  # type: ignore
 
         # List available tools
-        response = await self.session.list_tools()
+        response = await self.session.list_tools()  # type: ignore
         self.tools = [
             {
                 "type": "function",
@@ -54,10 +54,7 @@ class OllamaMCPClient(AbstractMCPClient):
             }
             for tool in response.tools
         ]
-        print(
-            "\nConnected to server with tools:",
-            [tool["function"]["name"] for tool in self.tools],
-        )
+        self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
 
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
@@ -70,6 +67,7 @@ class OllamaMCPClient(AbstractMCPClient):
             yield part
 
     async def recursive_prompt(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
+        # Streaming does not work when providing with tools, that's the issue with API itself.
         stream = await self.client.chat(
             model="qwen2.5:7b",
             messages=messages,
@@ -77,40 +75,34 @@ class OllamaMCPClient(AbstractMCPClient):
             stream=True,
         )
 
-        tool_calls: Sequence[Message.ToolCall] = []
-        # content_buffer = []
+        tool_messages: list[str] = []
         async for part in stream:
             if part.message.content:
-                # content_buffer.append(part.message.content)
                 yield part.message.content
             elif part.message.tool_calls:
-                # TODO: call tools separately instead of all together
-                tool_calls += part.message.tool_calls
+                self.logger.debug(f"Calling tool: {part.message.tool_calls}")
+                tool_messages.extend(await self.tool_call(part.message.tool_calls))
 
-        if len(tool_calls) > 0:
-            tool_messages, tool_results = await self.tool_call(tool_calls)
+        if len(tool_messages) > 0:
             for tool_message in tool_messages:
                 messages.append({"role": "user", "content": tool_message})
             async for part in self.recursive_prompt(messages):
                 yield part
 
-    async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> Tuple[list[str], list[dict[str, Any]]]:
+    async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
         messages: list[str] = []
-        tool_results: list[dict] = []
         for tool in tool_calls:
             tool_name = tool.function.name
             tool_args = tool.function.arguments
 
             # Execute tool call
-            result = await self.session.call_tool(tool_name, dict(tool_args))
-            tool_results.append({"call": tool_name, "result": result})
-            # print(tool_results)
-            message = f"Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}"
-            print(f"[{message}]")
+            result = await self.session.call_tool(tool_name, dict(tool_args))  # type: ignore
+            self.logger.debug(f"Tool call result: {result}")
+            message = f"Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}"  # type: ignore
 
             # Continue conversation with tool results
             messages.append(message)
-        return messages, tool_results
+        return messages
 
     async def chat_loop(self):
         """Run an interactive chat loop"""
@@ -124,8 +116,8 @@ class OllamaMCPClient(AbstractMCPClient):
                 if query.lower() == "quit":
                     break
 
-                async for response in self.process_query(query):
-                    print(response, end="", flush=True)
+                async for part in self.process_query(query):
+                    print(part, end="", flush=True)
 
             except Exception as e:
                 print(f"\nError: {str(e)}")
