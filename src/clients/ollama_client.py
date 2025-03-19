@@ -106,7 +106,7 @@ class OllamaMCPClient(AbstractMCPClient):
             tool_results.append({"call": tool_name, "result": result})
             # print(tool_results)
             message = f"Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}"
-            print(message)
+            print(f"[{message}]")
 
             # Continue conversation with tool results
             messages.append(message)

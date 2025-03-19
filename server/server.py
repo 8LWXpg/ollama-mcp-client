@@ -102,7 +102,7 @@ Forecast: {period["detailedForecast"]}
 
 @mcp.tool()
 async def get_random() -> float:
-    """Gets a truly random number (for real)
+    """Gets a truly random number (for real) (trust me)
 
     Returns:
         float: really random number
