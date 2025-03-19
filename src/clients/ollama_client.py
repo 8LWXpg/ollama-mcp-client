@@ -84,16 +84,15 @@ class OllamaMCPClient(AbstractMCPClient):
                 # content_buffer.append(part.message.content)
                 yield part.message.content
             elif part.message.tool_calls:
+                # TODO: call tools separately instead of all together
                 tool_calls += part.message.tool_calls
 
-        if len(tool_calls) == 0:
-            yield ""
-
-        tool_messages, tool_results = await self.tool_call(tool_calls)
-        for tool_message in tool_messages:
-            messages.append({"role": "user", "content": tool_message})
-        async for part in self.recursive_prompt(messages):
-            yield part
+        if len(tool_calls) > 0:
+            tool_messages, tool_results = await self.tool_call(tool_calls)
+            for tool_message in tool_messages:
+                messages.append({"role": "user", "content": tool_message})
+            async for part in self.recursive_prompt(messages):
+                yield part
 
     async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> Tuple[list[str], list[dict[str, Any]]]:
         messages: list[str] = []
@@ -106,7 +105,7 @@ class OllamaMCPClient(AbstractMCPClient):
             result = await self.session.call_tool(tool_name, dict(tool_args))
             tool_results.append({"call": tool_name, "result": result})
             # print(tool_results)
-            message = f"[Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}]"
+            message = f"Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}"
             print(message)
 
             # Continue conversation with tool results
