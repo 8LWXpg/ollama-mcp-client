@@ -65,7 +65,7 @@ class MCPClient:
         } for tool in response.tools]
 
         response = self.client.chat(
-            model="llama3.1",
+            model="qwen2.5:7b",
             messages=messages,
             tools=available_tools
         )
@@ -93,7 +93,7 @@ class MCPClient:
                 })
 
                 response = self.client.chat(
-                    model="llama3.1",
+                    model="qwen2.5:7b",
                     messages=messages,
                 )
 

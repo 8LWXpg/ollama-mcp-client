@@ -1,7 +1,7 @@
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from ollama import Client
+from ollama import AsyncClient
 from src.abstract.base_client import AbstractMCPClient
 
 
@@ -10,7 +10,7 @@ class OllamaMCPClient(AbstractMCPClient):
         # Initialize session and client objects
         super().__init__()
 
-        self.client = Client()
+        self.client = AsyncClient("http://192.168.0.33:11434")
         self.tools = []
 
     async def connect_to_server(self, commandline: list[str]):
@@ -56,10 +56,12 @@ class OllamaMCPClient(AbstractMCPClient):
 
     async def process_query(self, query: str) -> str:
         """Process a query using LLM and available tools"""
-        messages = [{"role": "user", "content": query}]
+        messages = [{"": "", "role": "user", "content": query}]
 
-        response = self.client.chat(
-            model="llama3.1",
+        self.client.create
+
+        response = await self.client.chat(
+            model="qwen2.5:7b",
             messages=messages,
             tools=self.tools,
         )
@@ -78,17 +80,25 @@ class OllamaMCPClient(AbstractMCPClient):
                 # Execute tool call
                 result = await self.session.call_tool(tool_name, dict(tool_args))
                 tool_results.append({"call": tool_name, "result": result})
+                print(tool_results)
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
                 # Continue conversation with tool results
                 messages.append({"role": "user", "content": result.content[0].text})
 
-                response = self.client.chat(
-                    model="llama3.1",
+                response = ""
+                async for part in await self.client.chat(
+                    model="qwen2.5:7b",
                     messages=messages,
-                )
+                    stream=True,
+                ):
+                    content = part.message.content
+                    if content:
+                        print(content, end="", flush=True)
+                        response += content
+                # print(response)
 
-                final_text.append(response.message.content)
+                final_text.append(response)
 
         return "\n".join(final_text)
 
