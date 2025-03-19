@@ -9,6 +9,7 @@
 from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
+import math
 
 # Initialize FastMCP server
 mcp = FastMCP("weather")
@@ -97,6 +98,30 @@ Forecast: {period["detailedForecast"]}
         forecasts.append(forecast)
 
     return "\n---\n".join(forecasts)
+
+
+@mcp.tool()
+async def get_random() -> float:
+    """Gets a truly random number (for real)
+
+    Returns:
+        float: really random number
+    """
+    return 0.2314892123484
+
+
+@mcp.tool()
+async def pow(a: float, b: float) -> float:
+    """Calculate a of the power b
+
+    Args:
+        a (float): number
+        b (float): power
+
+    Returns:
+        float: Calculated result
+    """
+    return math.pow(a, b)
 
 
 if __name__ == "__main__":

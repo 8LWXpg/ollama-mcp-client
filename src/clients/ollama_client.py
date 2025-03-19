@@ -33,17 +33,11 @@ class OllamaMCPClient(AbstractMCPClient):
         # if not commandline.endswith(".py"):
         #     raise ValueError("Server script must be a .py or .js file")
 
-        server_params = StdioServerParameters(
-            command=commandline[0], args=commandline[1:], env=None
-        )
+        server_params = StdioServerParameters(command=commandline[0], args=commandline[1:], env=None)
 
-        stdio_transport = await self.exit_stack.enter_async_context(
-            stdio_client(server_params)
-        )
+        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
         self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(
-            ClientSession(self.stdio, self.write)
-        )
+        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
 
         await self.session.initialize()
 
@@ -68,10 +62,14 @@ class OllamaMCPClient(AbstractMCPClient):
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            # {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": query},
         ]
 
+        async for part in self.recursive_prompt(messages):
+            yield part
+
+    async def recursive_prompt(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
         stream = await self.client.chat(
             model="qwen2.5:7b",
             messages=messages,
@@ -79,35 +77,27 @@ class OllamaMCPClient(AbstractMCPClient):
             stream=True,
         )
 
-        tool_calls: Optional[Sequence[Message.ToolCall]] = None
-        content_buffer = []
+        tool_calls: Sequence[Message.ToolCall] = []
+        # content_buffer = []
         async for part in stream:
             if part.message.content:
-                content_buffer.append(part.message.content)
+                # content_buffer.append(part.message.content)
                 yield part.message.content
             elif part.message.tool_calls:
-                # this assume we get all tool calls at once
-                tool_calls = part.message.tool_calls
+                tool_calls += part.message.tool_calls
+
+        if len(tool_calls) == 0:
+            yield ""
 
         tool_messages, tool_results = await self.tool_call(tool_calls)
-        for message in tool_messages:
-            messages.append(message)
+        for tool_message in tool_messages:
+            messages.append({"role": "user", "content": tool_message})
+        async for part in self.recursive_prompt(messages):
+            yield part
 
-        stream = await self.client.chat(
-            model="qwen2.5:7b",
-            messages=messages,
-            stream=True,
-        )
-
-        async for part in stream:
-            if part.message.content:
-                yield part.message.content
-
-    async def tool_call(
-        self, tool_calls: Sequence[Message.ToolCall]
-    ) -> Tuple[list[dict[str, Any]], Sequence[dict]]:
-        messages: list[dict] = []
-        tool_results: Sequence[dict] = []
+    async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> Tuple[list[str], list[dict[str, Any]]]:
+        messages: list[str] = []
+        tool_results: list[dict] = []
         for tool in tool_calls:
             tool_name = tool.function.name
             tool_args = tool.function.arguments
@@ -116,10 +106,11 @@ class OllamaMCPClient(AbstractMCPClient):
             result = await self.session.call_tool(tool_name, dict(tool_args))
             tool_results.append({"call": tool_name, "result": result})
             # print(tool_results)
-            print(f"[Calling tool {tool_name} with args {tool_args}]")
+            message = f"[Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}]"
+            print(message)
 
             # Continue conversation with tool results
-            messages.append({"role": "user", "content": result.content[0].text})
+            messages.append(message)
         return messages, tool_results
 
     async def chat_loop(self):

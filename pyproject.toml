@@ -11,3 +11,12 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
 ]
+
+[tool.ruff]
+line-length = 150
+
+[tool.ruff.format]
+# quote-style = 'single'
+# indent-style = 'tab'
+docstring-code-format = true
+line-ending = 'lf'
