@@ -11,9 +11,7 @@
             "program": "examples/ollama_example.py",
             "console": "integratedTerminal",
             "args": [
-                "uv",
-                "run",
-                "./server/server.py"
+                "blender-mcp"
             ],
             "cwd": "${workspaceFolder}"
         }
