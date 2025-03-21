@@ -6,6 +6,7 @@
 # ]
 # ///
 
+import random
 from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -107,7 +108,7 @@ async def get_random() -> float:
     Returns:
         float: really random number
     """
-    return 0.2314892123484
+    return random.Random().random()
 
 
 @mcp.tool()
