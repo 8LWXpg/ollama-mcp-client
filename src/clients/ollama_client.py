@@ -71,7 +71,7 @@ class OllamaMCPClient(AbstractMCPClient):
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
-            model="smollm2:135m",
+            model="qwen2.5:0.5b",
             messages=messages,
             tools=self.tools,
             stream=True,
@@ -81,7 +81,7 @@ class OllamaMCPClient(AbstractMCPClient):
         async for part in stream:
             if part.message.content:
                 yield part.message.content
-            elif part.message.tool_calls:
+            if part.message.tool_calls:
                 self.logger.debug(f"Calling tool: {part.message.tool_calls}")
                 tool_messages.extend(await self.tool_call(part.message.tool_calls))
 
