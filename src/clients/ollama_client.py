@@ -68,7 +68,7 @@ class OllamaMCPClient(AbstractMCPClient):
             yield part
 
     async def recursive_prompt(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
-        # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
+        # Content does not stream when provided with tools, check ollama/ollama #9632.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
             model="qwen2.5:0.5b",
