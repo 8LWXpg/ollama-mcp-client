@@ -22,7 +22,7 @@ class OllamaMCPClient(AbstractMCPClient):
         # Initialize session and client objects
         super().__init__()
 
-        self.client = AsyncClient("http://192.168.0.33:11434")
+        self.client = AsyncClient()
         self.tools = []
 
     async def connect_to_server(self, commandline: list[str]):
@@ -71,7 +71,7 @@ class OllamaMCPClient(AbstractMCPClient):
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
-            model="qwen2.5:7b",
+            model="smollm2:135m",
             messages=messages,
             tools=self.tools,
             stream=True,
