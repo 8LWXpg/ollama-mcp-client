@@ -1,3 +1,4 @@
+import json
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -59,7 +60,7 @@ class OllamaMCPClient(AbstractMCPClient):
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
         messages: list[dict[str, Any]] = [
-            # {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": query},
         ]
 
@@ -86,7 +87,7 @@ class OllamaMCPClient(AbstractMCPClient):
 
         if len(tool_messages) > 0:
             for tool_message in tool_messages:
-                messages.append({"role": "user", "content": tool_message})
+                messages.append({"role": "tool", "content": tool_message})
             async for part in self.recursive_prompt(messages):
                 yield part
 
@@ -98,11 +99,11 @@ class OllamaMCPClient(AbstractMCPClient):
 
             # Execute tool call
             result = await self.session.call_tool(tool_name, dict(tool_args))  # type: ignore
-            self.logger.debug(f"Tool call result: {result}")
-            message = f"Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}"  # type: ignore
+            self.logger.debug(f"Tool call result: {result.content}")
+            message = f"tool: {tool_name}\nargs: {tool_args}\nreturn: {result.content[0].text}"  # type: ignore
 
             # Continue conversation with tool results
-            messages.append(message)
+            messages.append(message)  # type: ignore
         return messages
 
     async def chat_loop(self):
