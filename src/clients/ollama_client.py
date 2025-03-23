@@ -34,7 +34,7 @@ class OllamaMCPClient(AbstractMCPClient):
         # if not commandline.endswith(".py"):
         #     raise ValueError("Server script must be a .py or .js file")
 
-        server_params = StdioServerParameters(command=commandline[0], args=commandline[1:], env=None)
+        server_params = StdioServerParameters(command=commandline[0], args=commandline[1:])
 
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
         self.stdio, self.write = stdio_transport
