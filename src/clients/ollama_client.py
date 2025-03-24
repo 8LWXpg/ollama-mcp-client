@@ -1,3 +1,4 @@
+import json
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -112,14 +113,15 @@ class OllamaMCPClient(AbstractMCPClient):
             yield part
 
     async def recursive_prompt(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
-        # Streaming does not work when providing with tools, that's the issue with API itself.
+        # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
+        self.logger.debug("Prompting")
         stream = await self.client.chat(
             model=self.model if self.model else self.DefaultModel,
             messages=messages,
             tools=self.tools,
             stream=True,
         )
-        tool_messages: list[dict[str, Any]] = []
+        tool_messages: list[str] = []
         assistant_content = ""
 
         async for part in stream:
@@ -138,15 +140,12 @@ class OllamaMCPClient(AbstractMCPClient):
         # If tools were called, continue the conversation with tool results
         if len(tool_messages) > 0:
             for tool_message in tool_messages:
-                messages.append(tool_message)
-
-            # Get a new response that incorporates the tool results
-            follow_up_messages = messages.copy()
-            async for part in self.recursive_prompt(follow_up_messages):
+                messages.append({"role": "tool", "content": tool_message})
+            async for part in self.recursive_prompt(messages):
                 yield part
 
-    async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[dict[str, Any]]:
-        messages: list[dict[str, Any]] = []
+    async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
+        messages: list[str] = []
         for tool in tool_calls:
             tool_name = tool.function.name
             tool_args = tool.function.arguments
@@ -154,16 +153,10 @@ class OllamaMCPClient(AbstractMCPClient):
             # Execute tool call
             result = await self.session.call_tool(tool_name, dict(tool_args))  # type: ignore
             self.logger.debug(f"Tool call result: {result}")
-            message = f"Called tool \033[1m {tool_name} \033[0;0m with args {tool_args}, return result: \033[1m {result.content[0].text} \033[0;0m"  # type: ignore
-            self.logger.info(message)
+            message = f"Calling tool {tool_name} with args {tool_args} returned {result.content[0].text}"  # type: ignore
+
             # Continue conversation with tool results
-            messages.append(
-                {
-                    "role": "tool",
-                    "name": tool_name,
-                    "content": message,
-                }
-            )
+            messages.append(message)
         return messages
 
     async def chat_loop(self):
