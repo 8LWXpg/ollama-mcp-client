@@ -7,17 +7,14 @@ from src.abstract.base_client import AbstractMCPClient
 from typing import Any, AsyncIterator, Sequence
 from ollama import Message
 
-SYSTEM_PROMPT = """You are a professional Blender assistant with extensive knowledge of 3D modeling, animation, rendering, and scene creation. You can access Blender functions to help users create and manipulate 3D content in real-time. Provide expert guidance on Blender techniques, workflows, and best practices while leveraging available tools to demonstrate concepts directly in the Blender environment. Your responses should be clear, practical, and tailored to both beginners and experienced Blender artists.Your responses should be clear, practical, and tailored to both beginners and experienced Blender artists. Use the responses from these function calls to provide accurate and informative answers. The answers should be natural and hide the fact that you are using tools to access real-time information. Guide the user about available tools and their capabilities. Always utilize tools to access real-time information when required. Engage in a friendly manner to enhance the chat experience.
- 
+SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat. Use the responses from these function calls to provide accurate and informative answers. The answers should be natural and hide the fact that you are using tools to access real-time information. Guide the user about available tools and their capabilities. Always utilize tools to access real-time information when required. Engage in a friendly manner to enhance the chat experience.
+
 # Tools
  
 {tools}
- 
-# Notes
+
+# Notes:
   
-- Always run the get_*_info tool in the first time.
-- Skip the result if is unknown two times.
-- If return result is "Unknow tool", use the execute_blender_code tools to run the python code.
 - Ensure responses are based on the latest information available from function calls.
 - Maintain an engaging, supportive, and friendly tone throughout the dialogue.
 - Always highlight the potential of available tools to assist users comprehensively."""
@@ -28,8 +25,10 @@ class OllamaMCPClient(AbstractMCPClient):
         # Initialize session and client objects
         super().__init__()
 
+        self.DefaultModel = "qwen2.5:7b"
         self.client = AsyncClient("http://192.168.0.33:11434")
         self.tools = []
+        self.model = None  # Initialize model as None
 
     async def connect_to_server(self, commandline: list[str]):
         """Connect to an MCP server
@@ -37,9 +36,6 @@ class OllamaMCPClient(AbstractMCPClient):
         Args:
             server_script_path: Path to the server script (.py)
         """
-        # if not commandline.endswith(".py"):
-        #     raise ValueError("Server script must be a .py or .js file")
-
         server_params = StdioServerParameters(command=commandline[0], args=commandline[1:], env=None)
 
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
@@ -52,27 +48,63 @@ class OllamaMCPClient(AbstractMCPClient):
         response = await self.session.list_tools()  # type: ignore
         self.tools = [
             {
-                "name": tool.name,
-                "schema": {
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.inputSchema,
-                    },
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
                 },
             }
             for tool in response.tools
         ]
-        self.logger.info(f"Connected to server with tools: {[tool['name'] for tool in self.tools]}")
+        self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
+
+    async def get_available_models(self):
+        """Get list of available models from Ollama server"""
+        models_response = await self.client.list()
+        # print(models_response["models"])
+        return [model["model"] for model in models_response["models"]]
+
+    async def select_model(self):
+        """Let user select a model from available models"""
+        print("\nAvailable models:")
+        try:
+            models = await self.get_available_models()
+            print(f"\nType 'quit' or 'q' to use default model '{self.DefaultModel}'.")
+            for i, model in enumerate(models, 1):
+                if model == self.DefaultModel:
+                    print(f"{i}. {model} (default)")
+                else:
+                    print(f"{i}. {model}")
+
+            while True:
+                try:
+                    choice = input("\nSelect a model (number): ")
+                    if (cjpi := choice.lower()) == "quit" or cjpi == "q":
+                        print(f"Auto using default model: {self.DefaultModel}")
+                        self.model = self.DefaultModel
+                        break
+                    index = int(choice) - 1
+                    if 0 <= index < len(models):
+                        self.model = models[index]
+                        print(f"\nSelected model: {self.model}")
+                        break
+                    else:
+                        print("Invalid selection. Please try again.")
+                except ValueError:
+                    print("Please enter a valid number.")
+        except Exception as e:
+            print(f"Error listing models: {str(e)}")
+            print(f"Using default model: {self.DefaultModel}")
+            self.model = self.DefaultModel
 
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
         messages: list[dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT.format(tools="\n- ".join([f"{t['name']}: {t['schema']['function']['description']}" for t in self.tools])),
-            },
+            # {
+            #     "role": "system",
+            #     "content": SYSTEM_PROMPT.format(tools="\n- ".join([f"{t['function']['name']}: {t['function']['description']}" for t in self.tools])),
+            # },
             {"role": "user", "content": query},
         ]
 
@@ -82,13 +114,11 @@ class OllamaMCPClient(AbstractMCPClient):
     async def recursive_prompt(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
         # Streaming does not work when providing with tools, that's the issue with API itself.
         stream = await self.client.chat(
-            model="llama3.1",
-            # model="qwen2.5:7b",
+            model=self.model if self.model else self.DefaultModel,
             messages=messages,
             tools=self.tools,
             stream=True,
         )
-
         tool_messages: list[dict[str, Any]] = []
         assistant_content = ""
 
@@ -130,7 +160,6 @@ class OllamaMCPClient(AbstractMCPClient):
             messages.append(
                 {
                     "role": "tool",
-                    # "tool_call_id": tool_call.id,
                     "name": tool_name,
                     "content": message,
                 }
@@ -140,11 +169,19 @@ class OllamaMCPClient(AbstractMCPClient):
     async def chat_loop(self):
         """Run an interactive chat loop"""
         print("\nMCP Client Started!")
-        print("Type your queries or 'quit' to exit.")
+
+        # Let user select model before starting chat
+        await self.select_model()
+
+        print("\nType your queries or 'quit' to exit, 'select model' or 'sm' to change model.")
 
         while True:
             try:
                 query = input("\nQuery: ").strip()
+
+                if query.lower() == "sm" or query.lower() == "select model":
+                    await self.select_model()
+                    continue
 
                 if query.lower() == "quit":
                     break
