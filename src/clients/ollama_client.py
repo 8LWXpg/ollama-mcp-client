@@ -24,6 +24,7 @@ class OllamaMCPClient(AbstractMCPClient):
 
         self.client = AsyncClient("http://192.168.0.33:11434")
         self.tools = []
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     async def connect_to_server(self, commandline: list[str]):
         """Connect to an MCP server
@@ -59,20 +60,19 @@ class OllamaMCPClient(AbstractMCPClient):
 
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ]
+        self.messages.append({"role": "user", "content": query})
 
-        async for part in self.recursive_prompt(messages):
+        async for part in self.recursive_prompt():
             yield part
 
-    async def recursive_prompt(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
+    async def recursive_prompt(self) -> AsyncIterator[str]:
+        # self.messages.extend(messages)
+        self.logger.debug(f"message: {self.messages}")
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
             model="qwen2.5:7b",
-            messages=messages,
+            messages=self.messages,
             tools=self.tools,
             stream=True,
         )
@@ -87,8 +87,8 @@ class OllamaMCPClient(AbstractMCPClient):
 
         if len(tool_messages) > 0:
             for tool_message in tool_messages:
-                messages.append({"role": "tool", "content": tool_message})
-            async for part in self.recursive_prompt(messages):
+                self.messages.append({"role": "tool", "content": tool_message})
+            async for part in self.recursive_prompt():
                 yield part
 
     async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
