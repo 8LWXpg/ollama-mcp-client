@@ -12,7 +12,7 @@ Only supports stdio transport for now.
 Install the package in development mode:
 
 ```shell
-git clone https://github.com/anjor/ollama-mcp-client.git
+git clone https://github.com/8LWXpg/ollama-mcp-client
 cd ollama-mcp-client
 uv venv
 uv pip install -e .
