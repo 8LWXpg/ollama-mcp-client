@@ -1,11 +1,10 @@
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from ollama import AsyncClient
 from src.abstract.base_client import AbstractMCPClient
 
 from typing import AsyncIterator, Sequence
-from ollama import Message
+from ollama import AsyncClient, Message
 
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
 Use the responses from these function calls to provide accurate and informative answers.
