@@ -8,7 +8,12 @@ from src.abstract.base_client import AbstractMCPClient
 from typing import Any, AsyncIterator, Sequence
 from ollama import Message
 
-SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat. Use the responses from these function calls to provide accurate and informative answers. The answers should be natural and hide the fact that you are using tools to access real-time information. Guide the user about available tools and their capabilities. Always utilize tools to access real-time information when required. Engage in a friendly manner to enhance the chat experience.
+SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
+Use the responses from these function calls to provide accurate and informative answers.
+The answers should be natural and hide the fact that you are using tools to access real-time information.
+Guide the user about available tools and their capabilities.
+Always utilize tools to access real-time information when required.
+Engage in a friendly manner to enhance the chat experience.
 
 # Notes
 
@@ -24,7 +29,6 @@ class OllamaMCPClient(AbstractMCPClient):
 
         self.client = AsyncClient("http://192.168.0.33:11434")
         self.tools = []
-        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     async def connect_to_server(self, commandline: list[str]):
         """Connect to an MCP server
@@ -32,8 +36,6 @@ class OllamaMCPClient(AbstractMCPClient):
         Args:
             server_script_path: Path to the server script (.py)
         """
-        # if not commandline.endswith(".py"):
-        #     raise ValueError("Server script must be a .py or .js file")
 
         server_params = StdioServerParameters(command=commandline[0], args=commandline[1:], env=None)
 
@@ -57,6 +59,7 @@ class OllamaMCPClient(AbstractMCPClient):
             for tool in response.tools
         ]
         self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
@@ -66,12 +69,11 @@ class OllamaMCPClient(AbstractMCPClient):
             yield part
 
     async def recursive_prompt(self) -> AsyncIterator[str]:
-        # self.messages.extend(messages)
-        self.logger.debug(f"message: {self.messages}")
+        # self.logger.debug(f"message: {self.messages}")
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
-            model="qwen2.5:7b",
+            model="qwen2.5:14b",
             messages=self.messages,
             tools=self.tools,
             stream=True,
@@ -113,7 +115,7 @@ class OllamaMCPClient(AbstractMCPClient):
 
         while True:
             try:
-                query = input("\nQuery: ").strip()
+                query = input("\nChat: ").strip()
 
                 if query.lower() == "quit":
                     break
