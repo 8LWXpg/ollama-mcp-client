@@ -8,7 +8,29 @@ from src.abstract.base_client import AbstractMCPClient
 from typing import Any, AsyncIterator, Sequence
 from ollama import Message
 
-SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat. Use the responses from these function calls to provide accurate and informative answers. The answers should be natural and hide the fact that you are using tools to access real-time information. Guide the user about available tools and their capabilities. Always utilize tools to access real-time information when required. Engage in a friendly manner to enhance the chat experience.
+SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
+Use the responses from these function calls to provide accurate and informative answers.
+The answers should be natural and hide the fact that you are using tools to access real-time information.
+Guide the user about available tools and their capabilities.
+Always utilize tools to access real-time information when required.
+Engage in a friendly manner to enhance the chat experience.
+
+You will be provided with a database extracted from a Firefox browser. This database may contain various types of information, including browsing history, bookmarks, cookies, stored passwords, and download records. Your task is as follows:
+
+1. **Assess Query Relevance:**
+   - Analyze the provided input and determine if the query, instruction, or request is related to the contents of the Firefox browser database.
+   - If the query is unrelated to the database, clearly state this and request additional clarification if needed.
+
+2. **Interpret the Query:**
+   - For queries related to the database, identify the specific type of information being requested (e.g., searching browsing history for a website, retrieving bookmark details, accessing download records, etc.).
+   - Verify the database structure before proceeding. Only construct SQL queries if the relevant columns or tables exist. Use tool calls to confirm the presence of required database elements.
+
+3. **Process and Extract Information:**
+   - Once the relevant data type is identified, extract or analyze the pertinent information from the database to address the query.
+   - Ensure that responses are clear, concise, and mindful of data privacy and security considerations.
+
+4. **Request Clarification When Needed:**
+   - If the query is ambiguous or lacks sufficient detail, ask specific follow-up questions to gather the necessary information for effective processing.
 
 # Notes
 
@@ -24,7 +46,6 @@ class OllamaMCPClient(AbstractMCPClient):
 
         self.client = AsyncClient("http://192.168.0.33:11434")
         self.tools = []
-        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     async def connect_to_server(self, commandline: list[str]):
         """Connect to an MCP server
@@ -58,6 +79,16 @@ class OllamaMCPClient(AbstractMCPClient):
         ]
         self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
 
+        # Predefined messages
+        pre_tool: Sequence[Message.ToolCall] = [Message.ToolCall(function=Message.ToolCall.Function(name="list_tables", arguments={}))]
+        self.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "tool",
+                "content": (await self.tool_call(pre_tool))[0],
+            },
+        ]
+
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
         self.messages.append({"role": "user", "content": query})
@@ -67,11 +98,11 @@ class OllamaMCPClient(AbstractMCPClient):
 
     async def recursive_prompt(self) -> AsyncIterator[str]:
         # self.messages.extend(messages)
-        self.logger.debug(f"message: {self.messages}")
+        # self.logger.debug(f"message: {self.messages}")
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
-            model="qwen2.5:7b",
+            model="qwen2.5:14b",
             messages=self.messages,
             tools=self.tools,
             stream=True,
@@ -113,7 +144,7 @@ class OllamaMCPClient(AbstractMCPClient):
 
         while True:
             try:
-                query = input("\nQuery: ").strip()
+                query = input("\nChat: ").strip()
 
                 if query.lower() == "quit":
                     break

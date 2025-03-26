@@ -1,0 +1,20 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "test with mcp-server-sqlite",
+            "type": "shell",
+            "command": "uv",
+            "args": [
+                "run",
+                "examples/ollama_example.py",
+                "mcp-server-sqlite",
+                "--db-path",
+                "C:/Users/peng2/AppData/Roaming/zen/Profiles/ikt4unsc.Default (alpha)/places.sqlite"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

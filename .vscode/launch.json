@@ -11,9 +11,9 @@
             "program": "examples/ollama_example.py",
             "console": "integratedTerminal",
             "args": [
-                "uv",
-                "run",
-                "./server/server.py"
+                "mcp-server-sqlite",
+                "--db-path",
+                "C:/Users/peng2/AppData/Roaming/zen/Profiles/ikt4unsc.Default (alpha)/places.sqlite"
             ],
             "cwd": "${workspaceFolder}"
         }
