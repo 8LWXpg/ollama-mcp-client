@@ -6,22 +6,17 @@ from src.abstract.base_client import AbstractMCPClient
 from typing import AsyncIterator, Sequence
 from ollama import AsyncClient, Message
 
-SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
-Use the responses from these function calls to provide accurate and informative answers.
-The answers should be natural and hide the fact that you are using tools to access real-time information.
-Guide the user about available tools and their capabilities.
-Always utilize tools to access real-time information when required.
-Engage in a friendly manner to enhance the chat experience.
-
-You will be provided with a database extracted from a Firefox browser. This database may contain various types of information, including browsing history, bookmarks, cookies, stored passwords, and download records. Your task is as follows:
+SYSTEM_PROMPT = """You will be provided with a database extracted from a Browser. This database may contain various types of information, including browsing history, bookmarks, cookies, stored passwords, and download records. Your task is as follows:
 
 1. **Assess Query Relevance:**
-   - Analyze the provided input and determine if the query, instruction, or request is related to the contents of the Firefox browser database.
+   - Analyze the provided input and determine if the query, instruction, or request is related to the contents of the Browser database.
    - If the query is unrelated to the database, clearly state this and request additional clarification if needed.
 
 2. **Interpret the Query:**
    - For queries related to the database, identify the specific type of information being requested (e.g., searching browsing history for a website, retrieving bookmark details, accessing download records, etc.).
-   - Verify the database structure before proceeding. Only construct SQL queries if the relevant columns or tables exist. Use tool calls to confirm the presence of required database elements.
+   - Only construct SQL queries if the relevant columns or tables exist.
+   - Use tool calls to confirm the presence of required database elements.
+   - Verify the database structure before proceeding.
 
 3. **Process and Extract Information:**
    - Once the relevant data type is identified, extract or analyze the pertinent information from the database to address the query.
@@ -76,7 +71,9 @@ class OllamaMCPClient(AbstractMCPClient):
             for tool in response.tools
         ]
         self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
+        await self.prepare_prompt()
 
+    async def prepare_prompt(self):
         # Predefined messages
         pre_tool: Sequence[Message.ToolCall] = [Message.ToolCall(function=Message.ToolCall.Function(name="list_tables", arguments={}))]
         self.messages = [
@@ -144,8 +141,12 @@ class OllamaMCPClient(AbstractMCPClient):
             try:
                 query = input("\nChat: ").strip()
 
-                if query.lower() == "quit":
-                    break
+                match query.lower():
+                    case "quit":
+                        break
+                    case "clear":
+                        await self.prepare_prompt()
+                        continue
 
                 async for part in self.process_query(query):
                     print(part, end="", flush=True)
