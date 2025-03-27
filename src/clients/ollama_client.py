@@ -57,7 +57,20 @@ class OllamaMCPClient(AbstractMCPClient):
             for tool in response.tools
         ]
         self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
-        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        await self.prepare_prompt()
+
+    async def prepare_prompt(self):
+        """Predefined messages"""
+        prompt = (await self.session.get_prompt("default")).messages  # type: ignore
+        # pre_tool: Sequence[Message.ToolCall] = [Message.ToolCall(function=Message.ToolCall.Function(name="list_tables", arguments={}))]
+        self.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": prompt[0].content.text},  # type: ignore
+            # {
+            #     "role": "tool",
+            #     "content": (await self.tool_call(pre_tool))[0],
+            # },
+        ]
 
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""
@@ -115,8 +128,12 @@ class OllamaMCPClient(AbstractMCPClient):
             try:
                 query = input("\nChat: ").strip()
 
-                if query.lower() == "quit":
-                    break
+                match query.lower():
+                    case "quit":
+                        break
+                    case "clear":
+                        await self.prepare_prompt()
+                        continue
 
                 async for part in self.process_query(query):
                     print(part, end="", flush=True)
