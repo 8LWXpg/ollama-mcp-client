@@ -12,8 +12,8 @@ async def main():
     client = OllamaMCPClient()
     print("client initiated")
     try:
-        server_params = ConfigContainer.form_file(sys.argv[1])
-        await client.connect_to_server(server_params[0][1])
+        config = ConfigContainer.form_file(sys.argv[1])
+        await client.connect_to_multiple_servers(config)
         await client.chat_loop()
     finally:
         await client.cleanup()

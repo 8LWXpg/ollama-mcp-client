@@ -4,7 +4,9 @@ from mcp.client.stdio import stdio_client
 from src.abstract.base_client import AbstractMCPClient
 
 from typing import AsyncIterator, Sequence
-from ollama import AsyncClient, Message
+from ollama import AsyncClient, Message, Tool
+
+from src.abstract.server_config import ConfigContainer
 
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
 Use the responses from these function calls to provide accurate and informative answers.
@@ -29,41 +31,52 @@ class OllamaMCPClient(AbstractMCPClient):
         self.tools = []
         self.messages = []
 
-    async def connect_to_server(self, server_params: StdioServerParameters):
+    async def connect_to_multiple_servers(self, config: ConfigContainer):
+        for name, params in config.items():
+            session, tools = await self.connect_to_server(name, params)
+            self.session[name] = session
+            self.tools.extend(tools)
+
+        self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
+
+    async def connect_to_server(self, name: str, server_params: StdioServerParameters) -> tuple[ClientSession, Sequence[Tool]]:
         """Connect to an MCP server
 
         Args:
             server_script_path: Path to the server script (.py)
         """
-
         stdio, write = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        self.session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
+        session: ClientSession = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
 
-        await self.session.initialize()  # type: ignore
+        await session.initialize()
 
         # List available tools
-        response = await self.session.list_tools()  # type: ignore
-        self.tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.inputSchema,
-                },
-            }
+        response = await session.list_tools()
+        tools = [
+            Tool(
+                type="function",
+                function=Tool.Function(
+                    name=f"{name}/{tool.name}",
+                    description=tool.description,
+                    parameters=tool.inputSchema,  # type: ignore
+                ),
+            )
             for tool in response.tools
         ]
-        self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
-        await self.prepare_prompt()
+        return (session, tools)
 
     async def prepare_prompt(self):
         """Clear current message and create new one"""
+        default_prompts: list[str] = []
+        for name, session in self.session.items():
+            for prompt in (await session.list_prompts()).prompts:
+                if prompt.name == "default":
+                    default_prompts.append((await session.get_prompt(prompt.name)).messages[0].content.text)  # type: ignore
         # prompt = (await self.session.get_prompt("default")).messages  # type: ignore
         # pre_tool: Sequence[Message.ToolCall] = [Message.ToolCall(function=Message.ToolCall.Function(name="list_tables", arguments={}))]
         self.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            # {"role": "system", "content": prompt[0].content.text},  # type: ignore
+            {"role": "system", "content": "\n".join(default_prompts)},
             # {
             #     "role": "tool",
             #     "content": (await self.tool_call(pre_tool))[0],
@@ -105,16 +118,22 @@ class OllamaMCPClient(AbstractMCPClient):
     async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
         messages: list[str] = []
         for tool in tool_calls:
-            tool_name = tool.function.name
+            split = tool.function.name.split("/")
+            session = self.session[split[0]]
+            tool_name = split[1]
             tool_args = tool.function.arguments
 
             # Execute tool call
-            result = await self.session.call_tool(tool_name, dict(tool_args))  # type: ignore
-            self.logger.debug(f"Tool call result: {result.content}")
-            message = f"tool: {tool_name}\nargs: {tool_args}\nreturn: {result.content[0].text}"  # type: ignore
+            try:
+                result = await session.call_tool(tool_name, dict(tool_args))
+                self.logger.debug(f"Tool call result: {result.content}")
+                message = f"tool: {tool.function}\nargs: {tool_args}\nreturn: {result.content[0].text}"  # type: ignore
+            except Exception as e:
+                self.logger.debug(f"Tool call error: {e}")
+                message = f"Error in tool: {tool.function}\nargs: {tool_args}\n{e}"
 
             # Continue conversation with tool results
-            messages.append(message)  # type: ignore
+            messages.append(message)
         return messages
 
     async def chat_loop(self):

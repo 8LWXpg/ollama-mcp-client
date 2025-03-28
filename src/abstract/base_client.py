@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
-from typing import Optional
+from abc import ABC
 from contextlib import AsyncExitStack
-from mcp import ClientSession, StdioServerParameters
+from mcp import ClientSession
 
 import logging
 import colorlog
@@ -11,7 +10,7 @@ class AbstractMCPClient(ABC):
     """Abstract base class for MCP clients"""
 
     def __init__(self):
-        self.session: Optional[ClientSession] = None
+        self.session: dict[str, ClientSession] = {}
         self.exit_stack = AsyncExitStack()
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -35,23 +34,3 @@ class AbstractMCPClient(ABC):
         console_handler.setFormatter(formatter)
         if not self.logger.hasHandlers():
             self.logger.addHandler(console_handler)
-
-    @abstractmethod
-    async def connect_to_server(self, server_params: StdioServerParameters) -> None:
-        """
-        Connect to an MCP server
-
-        Args:
-            commandline: commandline to execute MCP server
-        """
-        pass
-
-    @abstractmethod
-    async def chat_loop(self) -> None:
-        """Run an interactive chat loop"""
-        pass
-
-    @abstractmethod
-    async def cleanup(self) -> None:
-        """Clean up resources"""
-        pass

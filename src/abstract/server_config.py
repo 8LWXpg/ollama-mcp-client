@@ -10,7 +10,7 @@ class ConfigContainer(RootModel):
     Root model to represent the entire JSON structure with dynamic key.
     """
 
-    root: Dict[str, StdioServerParameters]
+    root: dict[str, StdioServerParameters]
 
     def __getitem__(self, index: int) -> tuple:
         """
@@ -24,6 +24,9 @@ class ConfigContainer(RootModel):
 
         name = list(self.root.keys())[index]
         return name, self.root[name]
+
+    def items(self):
+        return self.root.items()
 
     @classmethod
     def form_file(cls, file_path: str) -> Self:
