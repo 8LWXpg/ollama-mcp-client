@@ -1,0 +1,9 @@
+{
+    "sqlite-test": {
+        "command": "uv",
+        "args": [
+            "run",
+            "server/server.py"
+        ]
+    }
+}

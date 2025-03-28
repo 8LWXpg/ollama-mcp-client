@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 from contextlib import AsyncExitStack
-from mcp import ClientSession
+from mcp import ClientSession, StdioServerParameters
 
 import logging
 import colorlog
@@ -37,7 +37,7 @@ class AbstractMCPClient(ABC):
             self.logger.addHandler(console_handler)
 
     @abstractmethod
-    async def connect_to_server(self, commandline: list[str]) -> None:
+    async def connect_to_server(self, server_params: StdioServerParameters) -> None:
         """
         Connect to an MCP server
 

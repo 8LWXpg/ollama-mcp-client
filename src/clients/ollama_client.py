@@ -27,19 +27,17 @@ class OllamaMCPClient(AbstractMCPClient):
 
         self.client = AsyncClient("http://192.168.0.33:11434")
         self.tools = []
+        self.messages = []
 
-    async def connect_to_server(self, commandline: list[str]):
+    async def connect_to_server(self, server_params: StdioServerParameters):
         """Connect to an MCP server
 
         Args:
             server_script_path: Path to the server script (.py)
         """
 
-        server_params = StdioServerParameters(command=commandline[0], args=commandline[1:], env=None)
-
-        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+        stdio, write = await self.exit_stack.enter_async_context(stdio_client(server_params))
+        self.session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
 
         await self.session.initialize()  # type: ignore
 
@@ -60,12 +58,12 @@ class OllamaMCPClient(AbstractMCPClient):
         await self.prepare_prompt()
 
     async def prepare_prompt(self):
-        """Predefined messages"""
-        prompt = (await self.session.get_prompt("default")).messages  # type: ignore
+        """Clear current message and create new one"""
+        # prompt = (await self.session.get_prompt("default")).messages  # type: ignore
         # pre_tool: Sequence[Message.ToolCall] = [Message.ToolCall(function=Message.ToolCall.Function(name="list_tables", arguments={}))]
         self.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": prompt[0].content.text},  # type: ignore
+            # {"role": "system", "content": prompt[0].content.text},  # type: ignore
             # {
             #     "role": "tool",
             #     "content": (await self.tool_call(pre_tool))[0],
