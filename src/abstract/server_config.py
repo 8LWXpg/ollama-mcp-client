@@ -13,12 +13,6 @@ class ConfigContainer(RootModel):
     root: dict[str, StdioServerParameters]
 
     def __getitem__(self, index: int) -> tuple:
-        """
-        Convenience method to extract the first (and typically only) configuration.
-
-        Returns:
-            tuple: (name, ServerConfig)
-        """
         if not self.root:
             raise ValueError("No configurations found")
 

@@ -72,16 +72,9 @@ class OllamaMCPClient(AbstractMCPClient):
             for prompt in (await session.list_prompts()).prompts:
                 if prompt.name == "default":
                     default_prompts.append((await session.get_prompt(prompt.name)).messages[0].content.text)  # type: ignore
-        # prompt = (await self.session.get_prompt("default")).messages  # type: ignore
-        # pre_tool: Sequence[Message.ToolCall] = [Message.ToolCall(function=Message.ToolCall.Function(name="list_tables", arguments={}))]
-        self.messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": "\n".join(default_prompts)},
-            # {
-            #     "role": "tool",
-            #     "content": (await self.tool_call(pre_tool))[0],
-            # },
-        ]
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for prompt in default_prompts:
+            self.messages.append({"role": "system", "content": prompt})
 
     async def process_query(self, query: str) -> AsyncIterator[str]:
         """Process a query using LLM and available tools"""

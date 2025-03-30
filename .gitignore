@@ -11,4 +11,4 @@ wheels/
 .ropeproject
 
 # test db
-test.sqlite
+*.sqlite
