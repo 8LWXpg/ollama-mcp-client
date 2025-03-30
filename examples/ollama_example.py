@@ -9,14 +9,10 @@ async def main():
         print("Usage: python client.py <path_to_server_config.json>")
         sys.exit(1)
 
-    client = OllamaMCPClient()
-    print("client initiated")
-    try:
-        config = ConfigContainer.form_file(sys.argv[1])
-        await client.connect_to_multiple_servers(config)
+    config = ConfigContainer.form_file(sys.argv[1])
+    async with await OllamaMCPClient("http://192.168.0.33:11434").create(config) as client:
+        print("client initiated")
         await client.chat_loop()
-    finally:
-        await client.cleanup()
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
+import logging
+import colorlog
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from src.abstract.base_client import AbstractMCPClient
-
-from typing import AsyncIterator, Sequence
+from typing import AsyncIterator, Self, Sequence, cast
 from ollama import AsyncClient, Message, Tool
 
 from src.abstract.server_config import ConfigContainer
@@ -22,31 +23,70 @@ Engage in a friendly manner to enhance the chat experience.
 - Always highlight the potential of available tools to assist users comprehensively."""
 
 
-class OllamaMCPClient(AbstractMCPClient):
-    def __init__(self):
-        # Initialize session and client objects
-        super().__init__()
+class OllamaMCPClient(AbstractAsyncContextManager):
+    def __init__(self, host: str | None = None):
+        # Setup logging
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(logging.DEBUG)
 
-        self.client = AsyncClient("http://192.168.0.33:11434")
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG)
+        formatter = colorlog.ColoredFormatter(
+            "%(log_color)s%(levelname)s%(reset)s - %(message)s",
+            datefmt=None,
+            reset=True,
+            log_colors={
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "bold_red",
+            },
+        )
+
+        console_handler.setFormatter(formatter)
+        if not self.logger.hasHandlers():
+            self.logger.addHandler(console_handler)
+
+        # Initialize client objects
+        self.client = AsyncClient(host)
         self.tools = []
         self.messages = []
+        self.session: dict[str, ClientSession] = {}
+        self.exit_stack = AsyncExitStack()
 
-    async def connect_to_multiple_servers(self, config: ConfigContainer):
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        try:
+            await self.exit_stack.aclose()
+        except ValueError:
+            return
+
+    @classmethod
+    async def create(cls, config: ConfigContainer, host="http://192.168.0.33:11434") -> Self:
+        """Factory method to create and initialize a client instance"""
+        client = cls(host)
+        await client._connect_to_multiple_servers(config)
+        return client
+
+    async def _connect_to_multiple_servers(self, config: ConfigContainer):
         for name, params in config.items():
-            session, tools = await self.connect_to_server(name, params)
+            session, tools = await self._connect_to_server(name, params)
             self.session[name] = session
             self.tools.extend(tools)
 
         self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
 
-    async def connect_to_server(self, name: str, server_params: StdioServerParameters) -> tuple[ClientSession, Sequence[Tool]]:
+    async def _connect_to_server(self, name: str, server_params: StdioServerParameters) -> tuple[ClientSession, Sequence[Tool]]:
         """Connect to an MCP server
 
         Args:
             server_script_path: Path to the server script (.py)
         """
         stdio, write = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        session: ClientSession = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
+        session = cast(ClientSession, await self.exit_stack.enter_async_context(ClientSession(stdio, write)))
 
         await session.initialize()
 
@@ -58,14 +98,14 @@ class OllamaMCPClient(AbstractMCPClient):
                 function=Tool.Function(
                     name=f"{name}/{tool.name}",
                     description=tool.description,
-                    parameters=tool.inputSchema,  # type: ignore
+                    parameters=cast(Tool.Function.Parameters, tool.inputSchema),
                 ),
             )
             for tool in response.tools
         ]
         return (session, tools)
 
-    async def prepare_prompt(self):
+    async def _prepare_prompt(self):
         """Clear current message and create new one"""
         default_prompts: list[str] = []
         for name, session in self.session.items():
@@ -80,10 +120,10 @@ class OllamaMCPClient(AbstractMCPClient):
         """Process a query using LLM and available tools"""
         self.messages.append({"role": "user", "content": query})
 
-        async for part in self.recursive_prompt():
+        async for part in self._recursive_prompt():
             yield part
 
-    async def recursive_prompt(self) -> AsyncIterator[str]:
+    async def _recursive_prompt(self) -> AsyncIterator[str]:
         # self.logger.debug(f"message: {self.messages}")
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
@@ -100,15 +140,15 @@ class OllamaMCPClient(AbstractMCPClient):
                 yield part.message.content
             elif part.message.tool_calls:
                 self.logger.debug(f"Calling tool: {part.message.tool_calls}")
-                tool_messages.extend(await self.tool_call(part.message.tool_calls))
+                tool_messages.extend(await self._tool_call(part.message.tool_calls))
 
         if len(tool_messages) > 0:
             for tool_message in tool_messages:
                 self.messages.append({"role": "tool", "content": tool_message})
-            async for part in self.recursive_prompt():
+            async for part in self._recursive_prompt():
                 yield part
 
-    async def tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
+    async def _tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
         messages: list[str] = []
         for tool in tool_calls:
             split = tool.function.name.split("/")
@@ -142,15 +182,11 @@ class OllamaMCPClient(AbstractMCPClient):
                     case "quit":
                         break
                     case "clear":
-                        await self.prepare_prompt()
+                        await self._prepare_prompt()
                         continue
 
                 async for part in self.process_query(query):
                     print(part, end="", flush=True)
 
             except Exception as e:
-                print(f"\nError: {str(e)}")
-
-    async def cleanup(self):
-        """Clean up resources"""
-        await self.exit_stack.aclose()
+                self.logger.error(e)

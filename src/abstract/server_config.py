@@ -1,8 +1,7 @@
 import json
-from logging import root
-from typing import Dict, Self
+from typing import Self
 from mcp import StdioServerParameters
-from pydantic import BaseModel, RootModel
+from pydantic import RootModel
 
 
 class ConfigContainer(RootModel):

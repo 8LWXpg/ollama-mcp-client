@@ -3,14 +3,12 @@ name = "ollama-mcp-client"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "colorlog>=6.9.0",
     "fastmcp>=0.4.1",
-    "mcp>=1.1.2",
-    "ollama>=0.4.4",
-    "python-dotenv>=1.0.1",
-    "requests>=2.32.3",
+    "mcp>=1.6.0",
+    "ollama>=0.4.7",
 ]
 
 [tool.ruff]
