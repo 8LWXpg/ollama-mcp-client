@@ -1,0 +1,17 @@
+{
+    "test": {
+        "command": "uv",
+        "args": [
+            "run",
+            "server/server.py"
+        ]
+    },
+    "sqlite-test": {
+        "command": "uvx",
+        "args": [
+            "mcp-server-sqlite",
+            "--db-path",
+            "test.sqlite"
+        ]
+    }
+}
