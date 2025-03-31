@@ -1,17 +1,9 @@
 {
-    "test": {
+    "blender-mcp": {
         "command": "uv",
         "args": [
             "run",
-            "server/server.py"
-        ]
-    },
-    "sqlite-test": {
-        "command": "uvx",
-        "args": [
-            "mcp-server-sqlite",
-            "--db-path",
-            "test.sqlite"
+            "server/blender_server.py"
         ]
     }
 }

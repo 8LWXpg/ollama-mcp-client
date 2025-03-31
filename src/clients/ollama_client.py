@@ -114,6 +114,11 @@ class OllamaMCPClient(AbstractAsyncContextManager):
     async def list_tools(self) -> list[Tool]:
         return self.tools
 
+    async def get_available_models(self) -> list[str]:
+        """Get list of available models from Ollama server"""
+        models_response = await self.client.list()
+        return [model["model"] for model in models_response["models"]]
+
     async def prepare_prompt(self):
         """Clear current message and create new one"""
         default_prompts: list[str] = []
@@ -129,6 +134,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         """Process a query using LLM and available tools"""
         if model is None:
             model = "qwen2.5:14b"  # Predefined model
+
         self.messages.append({"role": "user", "content": message})
 
         async for part in self._recursive_prompt(model):
@@ -138,6 +144,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         # self.logger.debug(f"message: {self.messages}")
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
+
         stream = await self.client.chat(
             model=model,
             messages=self.messages,
@@ -145,7 +152,6 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             stream=True,
         )
         tool_messages: list[str] = []
-        assistant_content = ""
 
         async for part in stream:
             if part.message.content:
@@ -153,10 +159,6 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             elif part.message.tool_calls:
                 self.logger.debug(f"Calling tool: {part.message.tool_calls}")
                 tool_messages.extend(await self._tool_call(part.message.tool_calls))
-
-        # Add assistant's response to message history
-        if assistant_content:
-            messages.append({"role": "assistant", "content": assistant_content})
 
         # If tools were called, continue the conversation with tool results
         if len(tool_messages) > 0:
@@ -186,3 +188,37 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             # Continue conversation with tool results
             messages.append(message)
         return messages
+
+    async def get_status(self) -> dict:
+        """Get the status of Ollama and MCP server connections
+
+        Returns:
+            dict: Status information including:
+                - ollama_connected: Whether connection to Ollama server is active
+                - available_models: List of models available on Ollama server
+                - mcp_sessions: Status of each MCP server connection
+                - tools_count: Number of available tools
+        """
+        status = {"ollama_connected": False, "available_models": [], "mcp_sessions": {}, "tools_count": len(self.tools)}
+
+        # Check Ollama connection by trying to list models
+        try:
+            status["available_models"] = await self.get_available_models()
+            status["ollama_connected"] = True
+            self.logger.info(f"Ollama connection active with {len(status['available_models'])} models available")
+        except Exception as e:
+            self.logger.error(f"Failed to connect to Ollama server: {e}")
+            status["ollama_connected"] = False
+
+        # Check MCP server connections
+        for name, session in self.session.items():
+            try:
+                # Ping or simple request to verify the connection is active
+                tools_response = await session.list_tools()
+                status["mcp_sessions"][name] = {"connected": True, "tools_count": len(tools_response.tools)}
+                self.logger.info(f"MCP session '{name}' is active with {len(tools_response.tools)} tools")
+            except Exception as e:
+                self.logger.error(f"MCP session '{name}' connection error: {e}")
+                status["mcp_sessions"][name] = {"connected": False, "error": str(e)}
+
+        return status

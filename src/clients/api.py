@@ -5,6 +5,7 @@ import asyncio
 from pydantic import BaseModel
 from typing import Optional
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
 
 # Import your OllamaMCPClient from the original file
 from abstract.server_config import ConfigContainer
@@ -13,11 +14,12 @@ from clients.ollama_client import OllamaMCPClient
 # Global client instance
 client_instance = None
 client_lock = asyncio.Lock()
+client_default_model = "qwen2.5:14b"
 
 
 class ChatRequest(BaseModel):
     message: str
-    model: Optional[str] = "qwen2.5:14b"
+    model: Optional[str] = client_default_model
 
 
 @asynccontextmanager
@@ -37,6 +39,15 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app with lifespan handler
 app = FastAPI(title="Ollama MCP API", lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Specify the allowed origin
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 
 async def get_client():
@@ -87,3 +98,22 @@ async def get_tools():
     tools = await client.list_tools()
 
     return Response(json.dumps([tool.model_dump() for tool in tools]), media_type="text/json")
+
+
+@app.get("/api/models")
+async def get_models():
+    """Get available models from Ollama server"""
+    client = await get_client()
+    models = await client.get_available_models()
+    return Response(
+        json.dumps({"models": models, "default": client_default_model}),
+        media_type="text/json",
+    )
+
+
+@app.get("/api/status")
+async def get_status():
+    """Get status of the server"""
+    client = await get_client()
+    status = await client.get_status()
+    return Response(json.dumps(status), media_type="text/json")

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTLab Client Interface</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+        integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="../static/css/style.css" />
+</head>
+
+<body>
+    <!-- Left sidebar navigation -->
+    <div class="sidebar-menu">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">RTLab</div>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item active" data-page="home">
+                <i class="fa fa-home" aria-hidden="true"></i>
+                <span>Home</span>
+            </li>
+            <li class="nav-item" data-page="chat">
+                <i class="fa fa-comments" aria-hidden="true"></i>
+                <span>Chat</span>
+            </li>
+            <li class="nav-item" data-page="image-generation">
+                <i class="fa fa-commenting" aria-hidden="true"></i>
+                <span>Generate Image</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main content wrapper -->
+    <div class="main-wrapper">
+        <div class="page-content">
+            <!-- Home page -->
+            <div id="home" class="page active">
+                <header>
+                    <div class="header-content">
+                        <div class="logo">RTLab MCP Client</div>
+                        <div id="current-model-badge" class="model-badge">No model selected</div>
+                    </div>
+                </header>
+
+                <div class="box">
+                    <h1>Welcome to RTLab MCP Client</h1>
+                    <p>This client interface allows you to interact with various large language models through the
+                        Ollama API.</p>
+                    <p>Use the navigation menu on the left to access different features:</p>
+                    <ul>
+                        <li><strong>Chat:</strong> Have conversations with AI models</li>
+                        <li><strong>Generate Image:</strong> Create images using AI models</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Chat page -->
+            <div id="chat" class="page">
+                <header>
+                    <div class="header-content">
+                        <div class="logo">Chat Interface</div>
+                        <div id="chat-model-badge" class="model-badge">No model selected</div>
+                    </div>
+                    <div class="header-controls">
+                        <button id="clear-chat">Clear Chat</button>
+                    </div>
+                </header>
+
+                <div class="container">
+                    <div class="main-content">
+                        <div class="box model-selection">
+                            <h2>Model Selection</h2>
+                            <div class="model-controls">
+                                <select id="model-select">
+                                    <option value="" disabled selected>Loading models...</option>
+                                </select>
+                                <button id="refresh-models">Refresh</button>
+                                <span id="loading-models" class="loading" style="display: none;">Loading...</span>
+                            </div>
+                        </div>
+
+                        <div class="box chat-container">
+                            <div class="chat-messages" id="chat-messages">
+                                <div class="message assistant-message">
+                                    Hello! I'm your Ollama MCP assistant. How can I help you today?
+                                </div>
+                            </div>
+                            <div class="input-area">
+                                <textarea id="user-input" placeholder="Type your message here..." rows="3"></textarea>
+                                <button id="send-button">Send</button>
+                            </div>
+                            <div class="status-bar">
+                                <span id="connection-status">Connected</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar">
+                        <div class="box tools-info">
+                            <h2>Available Tools</h2>
+                            <div id="tools-list" class="tools-list">Loading available tools...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Generation page -->
+            <div id="image-generation" class="page">
+                <header>
+                    <div class="header-content">
+                        <div class="logo">Image Generation</div>
+                    </div>
+                </header>
+
+                <div class="box">
+                    <h2>Generate Images with AI</h2>
+                    <div class="image-generation-form">
+                        <div>
+                            <label for="prompt">Enter your prompt:</label>
+                            <textarea id="prompt" rows="4" style="width: 100%; margin-top: 8px;"
+                                placeholder="Describe the image you want to generate..."></textarea>
+                        </div>
+                        <div>
+                            <label for="image-model">Select model:</label>
+                            <select id="image-model" style="width: 100%; margin-top: 8px;">
+                                <option value="stable-diffusion">Stable Diffusion</option>
+                                <option value="dalle-mini">DALL-E Mini</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button id="generate-button" style="width: 150px;">Generate Image</button>
+                        </div>
+                        <div class="image-preview" id="image-preview">
+                            <p>Image preview will appear here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <script src="../static/js/script.js"></script>
+</body>
+
+</html>
