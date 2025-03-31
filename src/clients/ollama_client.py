@@ -1,5 +1,7 @@
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
+import json
 import logging
+from abstract.api_response import ChatResponse
 import colorlog
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -7,7 +9,7 @@ from mcp.client.stdio import stdio_client
 from typing import AsyncIterator, Self, Sequence, cast
 from ollama import AsyncClient, Message, Tool
 
-from src.abstract.server_config import ConfigContainer
+from abstract.server_config import ConfigContainer
 
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
 Use the responses from these function calls to provide accurate and informative answers.
@@ -50,7 +52,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
         # Initialize client objects
         self.client = AsyncClient(host)
-        self.tools = []
+        self.tools: list[Tool] = []
         self.messages = []
         self.session: dict[str, ClientSession] = {}
         self.exit_stack = AsyncExitStack()
@@ -105,10 +107,13 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         ]
         return (session, tools)
 
-    async def _prepare_prompt(self):
+    async def list_tools(self) -> list[Tool]:
+        return self.tools
+
+    async def prepare_prompt(self):
         """Clear current message and create new one"""
         default_prompts: list[str] = []
-        for name, session in self.session.items():
+        for _, session in self.session.items():
             for prompt in (await session.list_prompts()).prompts:
                 if prompt.name == "default":
                     default_prompts.append((await session.get_prompt(prompt.name)).messages[0].content.text)  # type: ignore
@@ -116,19 +121,21 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         for prompt in default_prompts:
             self.messages.append({"role": "system", "content": prompt})
 
-    async def process_query(self, query: str) -> AsyncIterator[str]:
+    async def process_message(self, message: str, model: str | None = None) -> AsyncIterator[ChatResponse]:
         """Process a query using LLM and available tools"""
-        self.messages.append({"role": "user", "content": query})
+        if model is None:
+            model = "qwen2.5:14b"  # Predefined model
+        self.messages.append({"role": "user", "content": message})
 
-        async for part in self._recursive_prompt():
+        async for part in self._recursive_prompt(model):
             yield part
 
-    async def _recursive_prompt(self) -> AsyncIterator[str]:
+    async def _recursive_prompt(self, model: str) -> AsyncIterator[ChatResponse]:
         # self.logger.debug(f"message: {self.messages}")
         # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
-            model="qwen2.5:14b",
+            model=model,
             messages=self.messages,
             tools=self.tools,
             stream=True,
@@ -137,7 +144,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         tool_messages: list[str] = []
         async for part in stream:
             if part.message.content:
-                yield part.message.content
+                yield ChatResponse(role="assistant", content=part.message.content)
             elif part.message.tool_calls:
                 self.logger.debug(f"Calling tool: {part.message.tool_calls}")
                 tool_messages.extend(await self._tool_call(part.message.tool_calls))
@@ -145,7 +152,8 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         if len(tool_messages) > 0:
             for tool_message in tool_messages:
                 self.messages.append({"role": "tool", "content": tool_message})
-            async for part in self._recursive_prompt():
+                yield ChatResponse(role="tool", content=json.dumps(tool_message))
+            async for part in self._recursive_prompt(model):
                 yield part
 
     async def _tool_call(self, tool_calls: Sequence[Message.ToolCall]) -> list[str]:
@@ -168,25 +176,3 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             # Continue conversation with tool results
             messages.append(message)
         return messages
-
-    async def chat_loop(self):
-        """Run an interactive chat loop"""
-        print("\nMCP Client Started!")
-        print("Type your queries or 'quit' to exit.")
-
-        while True:
-            try:
-                query = input("\nChat: ").strip()
-
-                match query.lower():
-                    case "quit":
-                        break
-                    case "clear":
-                        await self._prepare_prompt()
-                        continue
-
-                async for part in self.process_query(query):
-                    print(part, end="", flush=True)
-
-            except Exception as e:
-                self.logger.error(e)

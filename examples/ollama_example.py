@@ -1,7 +1,7 @@
 import asyncio
 import sys
-from src.abstract.server_config import ConfigContainer
-from src.clients.ollama_client import OllamaMCPClient
+from abstract.server_config import ConfigContainer
+from clients.ollama_client import OllamaMCPClient
 
 
 async def main():
@@ -10,9 +10,28 @@ async def main():
         sys.exit(1)
 
     config = ConfigContainer.form_file(sys.argv[1])
-    async with await OllamaMCPClient("http://192.168.0.33:11434").create(config) as client:
+    async with await OllamaMCPClient.create(config) as client:
         print("client initiated")
-        await client.chat_loop()
+        print("\nMCP Client Started!")
+        print("Type your queries or 'quit' to exit.")
+
+        while True:
+            try:
+                query = input("\nChat: ").strip()
+
+                match query.lower():
+                    case "quit":
+                        break
+                    case "clear":
+                        await client.prepare_prompt()
+                        continue
+
+                async for part in client.process_message(query):
+                    message = part["content"]
+                    print(message, end="", flush=True)
+
+            except Exception as e:
+                client.logger.error(e)
 
 
 if __name__ == "__main__":
