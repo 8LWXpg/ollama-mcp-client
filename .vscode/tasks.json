@@ -9,7 +9,8 @@
             "command": "uvicorn",
             "args": [
                 "clients.api:app"
-            ]
+            ],
+            "problemMatcher": []
         }
     ]
 }
