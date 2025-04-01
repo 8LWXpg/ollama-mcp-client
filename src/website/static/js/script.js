@@ -219,21 +219,23 @@ async function sendMessage() {
             const chunk = decoder.decode(value, { stream: true });
 
             try {
-                const data = JSON.parse(chunk);
+                const fixedChunk = `[${chunk.replaceAll('}{', '},{')}]`;
+                const data = JSON.parse(fixedChunk);
+                data.forEach((item) => {
+                    if (item.role === "assistant") {
+                        assistantResponse += item.content;
 
-                if (data.role === "assistant") {
-                    assistantResponse += data.content;
-
-                    // Update message in place or create new one
-                    if (!messageElement) {
-                        messageElement = addAssistantMessage(assistantResponse);
-                    } else {
-                        updateAssistantMessage(messageElement, assistantResponse);
+                        // Update message in place or create new one
+                        if (!messageElement) {
+                            messageElement = addAssistantMessage(assistantResponse);
+                        } else {
+                            updateAssistantMessage(messageElement, assistantResponse);
+                        }
+                    } else if (item.role === "tool") {
+                        const jsonData = convertToolResponseToJSON(item.content);
+                        addToolMessage(jsonData.tool.name, jsonData.args, jsonData.return);
                     }
-                } else if (data.role === "tool") {
-                    const jsonData = convertToolResponseToJSON(data.content);
-                    addToolMessage(jsonData.tool.name, jsonData.args, jsonData.return);
-                }
+                });
 
                 // Auto-scroll to keep the latest message visible
                 scrollToBottom();
