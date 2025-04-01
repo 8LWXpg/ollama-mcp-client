@@ -27,8 +27,9 @@ async def main():
                         continue
 
                 async for part in client.process_message(query):
-                    message = part["content"]
-                    print(message, end="", flush=True)
+                    if part["role"] == "assistant":
+                        message = part["content"]
+                        print(message, end="", flush=True)
 
             except Exception as e:
                 client.logger.error(e)
