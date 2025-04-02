@@ -52,7 +52,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
         # Initialize client objects
         self.client = AsyncClient(host)
-        self.tools: list[Tool] = []
+        self.tools: dict[str, list[Tool]] = {}
         self.messages = []
         self.session: dict[str, ClientSession] = {}
         self.exit_stack = AsyncExitStack()
@@ -77,9 +77,9 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         for name, params in config.items():
             session, tools = await self._connect_to_server(name, params)
             self.session[name] = session
-            self.tools.extend(tools)
+            self.tools[name] = list(tools)
 
-        self.logger.info(f"Connected to server with tools: {[tool['function']['name'] for tool in self.tools]}")
+        self.logger.info(f"Connected to server with tools: {[cast(Tool.Function, tool.function).name for tool in self.list_tools()]}")
 
     async def _connect_to_server(self, name: str, server_params: StdioServerParameters) -> tuple[ClientSession, Sequence[Tool]]:
         """Connect to an MCP server
@@ -107,8 +107,8 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         ]
         return (session, tools)
 
-    async def list_tools(self) -> list[Tool]:
-        return self.tools
+    def list_tools(self) -> list[Tool]:
+        return [tool for tools in self.tools.values() for tool in tools]
 
     async def prepare_prompt(self):
         """Clear current message and create new one"""
@@ -137,7 +137,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         stream = await self.client.chat(
             model=model,
             messages=self.messages,
-            tools=self.tools,
+            tools=self.list_tools(),
             stream=True,
         )
 

@@ -84,6 +84,6 @@ async def stream_chat(request: ChatRequest):
 @app.get("/api/tools")
 async def get_tools():
     client = await get_client()
-    tools = await client.list_tools()
+    tools = client.list_tools()
 
     return Response(json.dumps([tool.model_dump() for tool in tools]), media_type="text/json")
