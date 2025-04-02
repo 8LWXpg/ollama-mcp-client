@@ -7,17 +7,12 @@ from typing import Optional
 from contextlib import asynccontextmanager
 
 # Import your OllamaMCPClient from the original file
-from abstract.server_config import ConfigContainer
+from abstract.config_container import ConfigContainer
 from clients.ollama_client import OllamaMCPClient
 
 # Global client instance
 client_instance = None
 client_lock = asyncio.Lock()
-
-
-class ChatRequest(BaseModel):
-    message: str
-    model: Optional[str] = "qwen2.5:14b"
 
 
 @asynccontextmanager
@@ -57,6 +52,11 @@ async def get_client():
     return client_instance
 
 
+class ChatRequest(BaseModel):
+    message: str
+    model: Optional[str] = "qwen2.5:14b"
+
+
 @app.post("/api/chat")
 async def stream_chat(request: ChatRequest):
     client = await get_client()
@@ -84,6 +84,19 @@ async def stream_chat(request: ChatRequest):
 @app.get("/api/tools")
 async def get_tools():
     client = await get_client()
-    tools = client.list_tools()
+    tools = client.get_tools()
 
     return Response(json.dumps([tool.model_dump() for tool in tools]), media_type="text/json")
+
+
+@app.get("/api/servers")
+async def get_server():
+    client = await get_client()
+    return Response(json.dumps(list(client.selected_server.keys())))
+
+
+@app.put("/api/servers")
+async def select_server(request: list[str]):
+    client = await get_client()
+
+    client.select_server(request)

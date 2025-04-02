@@ -1,6 +1,7 @@
 import asyncio
+import re
 import sys
-from abstract.server_config import ConfigContainer
+from abstract.config_container import ConfigContainer
 from clients.ollama_client import OllamaMCPClient
 
 
@@ -24,6 +25,10 @@ async def main():
                         break
                     case "clear":
                         await client.prepare_prompt()
+                        continue
+                    case server_command if server_match := re.match(r"server (\w+)", server_command):
+                        server_name = server_match.group(1)
+                        client.select_server([server_name])
                         continue
 
                 async for part in client.process_message(query):

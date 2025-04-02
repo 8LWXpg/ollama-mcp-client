@@ -1,15 +1,18 @@
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
+from itertools import chain
 import json
 import logging
 from abstract.api_response import ChatResponse
+from abstract.session import Session
 import colorlog
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 
+from mcp import ClientSession, StdioServerParameters
+from mcp.types import TextContent
+from mcp.client.stdio import stdio_client
 from typing import AsyncIterator, Self, Sequence, cast
 from ollama import AsyncClient, Message, Tool
 
-from abstract.server_config import ConfigContainer
+from abstract.config_container import ConfigContainer
 
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
 Use the responses from these function calls to provide accurate and informative answers.
@@ -52,9 +55,9 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
         # Initialize client objects
         self.client = AsyncClient(host)
-        self.tools: dict[str, list[Tool]] = {}
+        self.servers: dict[str, Session] = {}
+        self.selected_server: dict[str, Session] = {}
         self.messages = []
-        self.session: dict[str, ClientSession] = {}
         self.exit_stack = AsyncExitStack()
 
     async def __aenter__(self):
@@ -76,12 +79,18 @@ class OllamaMCPClient(AbstractAsyncContextManager):
     async def _connect_to_multiple_servers(self, config: ConfigContainer):
         for name, params in config.items():
             session, tools = await self._connect_to_server(name, params)
-            self.session[name] = session
-            self.tools[name] = list(tools)
+            self.servers[name] = Session(session=session, tools=[*tools])
 
-        self.logger.info(f"Connected to server with tools: {[cast(Tool.Function, tool.function).name for tool in self.list_tools()]}")
+        # Default to no select
+        self.selected_server = self.servers
 
-    async def _connect_to_server(self, name: str, server_params: StdioServerParameters) -> tuple[ClientSession, Sequence[Tool]]:
+        self.logger.info(
+            f"Connected to server with tools: {[cast(Tool.Function, tool.function).name for tool in self.get_tools()]}"
+        )
+
+    async def _connect_to_server(
+        self, name: str, server_params: StdioServerParameters
+    ) -> tuple[ClientSession, Sequence[Tool]]:
         """Connect to an MCP server
 
         Args:
@@ -107,19 +116,32 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         ]
         return (session, tools)
 
-    def list_tools(self) -> list[Tool]:
-        return [tool for tools in self.tools.values() for tool in tools]
+    def get_tools(self) -> list[Tool]:
+        return list(chain.from_iterable(server.tools for server in self.selected_server.values()))
+
+    def select_server(self, servers: list[str]) -> Self:
+        self.selected_server = {name: server for name, server in self.servers.items() if name in servers}
+        self.logger.info(f"Selected server: {list(self.selected_server.keys())}")
+        return self
 
     async def prepare_prompt(self):
         """Clear current message and create new one"""
-        default_prompts: list[str] = []
-        for _, session in self.session.items():
-            for prompt in (await session.list_prompts()).prompts:
-                if prompt.name == "default":
-                    default_prompts.append((await session.get_prompt(prompt.name)).messages[0].content.text)  # type: ignore
+
+        # Get all prompt with name "default"
+        # all_prompts = [
+        #     (server, prompt)
+        #     for server in self.selected_server.values()
+        #     for prompt in (await server.session.list_prompts()).prompts
+        # ]
+        # default_prompts = [
+        #     cast(TextContent, (await server.session.get_prompt(prompt.name)).messages[0].content).text
+        #     for server, prompt in all_prompts
+        #     if prompt.name == "default"
+        # ]
         self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for prompt in default_prompts:
-            self.messages.append({"role": "system", "content": prompt})
+        # + [
+        #     {"role": "system", "content": prompt} for prompt in default_prompts
+        # ]
 
     async def process_message(self, message: str, model: str | None = None) -> AsyncIterator[ChatResponse]:
         """Process a query using LLM and available tools"""
@@ -137,7 +159,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         stream = await self.client.chat(
             model=model,
             messages=self.messages,
-            tools=self.list_tools(),
+            tools=self.get_tools(),
             stream=True,
         )
 
@@ -161,7 +183,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         messages: list[str] = []
         for tool in tool_calls:
             split = tool.function.name.split("/")
-            session = self.session[split[0]]
+            session = self.selected_server[split[0]].session
             tool_name = split[1]
             tool_args = tool.function.arguments
 
@@ -169,7 +191,9 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             try:
                 result = await session.call_tool(tool_name, dict(tool_args))
                 self.logger.debug(f"Tool call result: {result.content}")
-                message = f"tool: {tool.function}\nargs: {tool_args}\nreturn: {result.content[0].text}"  # type: ignore
+                message = (
+                    f"tool: {tool.function}\nargs: {tool_args}\nreturn: {cast(TextContent, result.content[0]).text}"
+                )
             except Exception as e:
                 self.logger.debug(f"Tool call error: {e}")
                 message = f"Error in tool: {tool.function}\nargs: {tool_args}\n{e}"
