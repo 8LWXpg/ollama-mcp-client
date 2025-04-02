@@ -98,5 +98,10 @@ async def get_server():
 @app.put("/api/servers")
 async def select_server(request: list[str]):
     client = await get_client()
-
     client.select_server(request)
+
+
+@app.get("/api/models")
+async def get_models():
+    client = await get_client()
+    return Response((await client.client.list()).model_dump_json(), media_type="text/json")
