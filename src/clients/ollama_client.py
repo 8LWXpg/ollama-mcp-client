@@ -172,7 +172,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
                 tool_messages = await self._tool_call(part.message.tool_calls)
                 tool_messages_count += 1
                 for tool_message in tool_messages:
-                    yield ChatResponse(role="tool", content=json.dumps(tool_message))
+                    yield ChatResponse(role="tool", content=tool_message)
                     self.messages.append({"role": "tool", "content": tool_message})
 
         if tool_messages_count > 0:
@@ -191,9 +191,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             try:
                 result = await session.call_tool(tool_name, dict(tool_args))
                 self.logger.debug(f"Tool call result: {result.content}")
-                message = (
-                    f"tool: {tool.function}\nargs: {tool_args}\nreturn: {cast(TextContent, result.content[0]).text}"
-                )
+                message = f"tool: {tool.function.name}\nargs: {tool_args}\nreturn: {cast(TextContent, result.content[0]).text}"
             except Exception as e:
                 self.logger.debug(f"Tool call error: {e}")
                 message = f"Error in tool: {tool.function}\nargs: {tool_args}\n{e}"

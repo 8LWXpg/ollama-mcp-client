@@ -81,6 +81,12 @@ async def stream_chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"{e}")
 
 
+@app.delete("/api/chat")
+async def delete_chat():
+    client = await get_client()
+    await client.prepare_prompt()
+
+
 @app.get("/api/tools")
 async def get_tools():
     client = await get_client()
@@ -104,4 +110,5 @@ async def select_server(request: list[str]):
 @app.get("/api/models")
 async def get_models():
     client = await get_client()
-    return Response((await client.client.list()).model_dump_json(), media_type="text/json")
+    models = await client.client.list()
+    return Response(json.dumps([m.model for m in models.models]), media_type="text/json")
