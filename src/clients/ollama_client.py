@@ -151,20 +151,22 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             tools=self.tools,
             stream=True,
         )
-        tool_messages: list[str] = []
+
+        tool_messages_count = 0
 
         async for part in stream:
             if part.message.content:
                 yield ChatResponse(role="assistant", content=part.message.content)
             elif part.message.tool_calls:
                 self.logger.debug(f"Calling tool: {part.message.tool_calls}")
-                tool_messages.extend(await self._tool_call(part.message.tool_calls))
 
-        # If tools were called, continue the conversation with tool results
-        if len(tool_messages) > 0:
-            for tool_message in tool_messages:
-                self.messages.append({"role": "tool", "content": tool_message})
-                yield ChatResponse(role="tool", content=json.dumps(tool_message))
+                tool_messages = await self._tool_call(part.message.tool_calls)
+                tool_messages_count += 1
+                for tool_message in tool_messages:
+                    yield ChatResponse(role="tool", content=json.dumps(tool_message))
+                    self.messages.append({"role": "tool", "content": tool_message})
+
+        if tool_messages_count > 0:
             async for part in self._recursive_prompt(model):
                 yield part
 

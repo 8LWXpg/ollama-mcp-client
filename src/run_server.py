@@ -3,7 +3,7 @@ import signal
 import sys
 
 # Define the commands
-fastapi_cmd = ["uvicorn", "clients.api:app", "--host", "0.0.0.0", "--port", "8000"]
+fastapi_cmd = ["uvicorn", "src.clients.api:app", "--host", "0.0.0.0", "--port", "8000"]
 flask_cmd = ["uv", "run", "src/website/app.py"]
 
 # Start both processes

@@ -5,14 +5,35 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "accelerate>=1.6.0",
+    "blobfile>=3.0.0",
+    "clip",
     "colorlog>=6.9.0",
+    "diffusers>=0.32.2",
     "fastapi>=0.115.12",
     "fastmcp>=0.4.1",
+    "fire>=0.7.0",
     "flask>=3.1.0",
     "flask-cors>=5.0.1",
+    "humanize>=4.12.2",
     "hypercorn>=0.17.3",
+    "imageio>=2.37.0",
+    "ipywidgets>=8.1.5",
+    "matplotlib>=3.10.1",
     "mcp>=1.6.0",
+    "numpy>=2.2.4",
     "ollama>=0.4.7",
+    "pillow>=11.1.0",
+    "python-multipart>=0.0.20",
+    "pyyaml>=6.0.2",
+    "requests>=2.32.3",
+    "scikit-image>=0.25.2",
+    "scipy>=1.15.2",
+    "torch>=2.6.0",
+    "torchvision>=0.21.0",
+    "tqdm>=4.67.1",
+    "transformers>=4.50.3",
+    "uvicorn>=0.34.0",
 ]
 
 [tool.ruff]
@@ -23,6 +44,20 @@ line-length = 150
 # indent-style = 'tab'
 docstring-code-format = true
 line-ending = 'lf'
+
+[tool.uv.sources]
+clip = { git = "https://github.com/openai/CLIP.git" }
+torch = [
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
 
 [dependency-groups]
 dev = ["uvicorn[standard]>=0.34.0"]

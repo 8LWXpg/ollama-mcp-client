@@ -1,0 +1,15 @@
+Pillow
+torch
+fire
+humanize
+requests
+tqdm
+matplotlib
+scikit-image
+scipy
+numpy
+blobfile
+clip @ git+https://github.com/openai/CLIP.git
+pyyaml
+ipywidgets
+imageio
