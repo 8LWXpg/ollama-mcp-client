@@ -1028,8 +1028,8 @@ document.getElementById('transform-button').addEventListener('click', async () =
         sdformData.append('width', 512);
         sdformData.append('height', 512);
         sdformData.append('model_id', 'stabilityai/sd-turbo');
-        sdformData.append('strength', 0.5);
-        sdformData.append('guidance_scale', 2.0); // Match the default in your backend
+        sdformData.append('strength', strength);
+        sdformData.append('guidance_scale', 0.0); // Match the default in your backend
         // Make API request to start the job
         const response = await fetch(`${API_ENDPOINT}/image-to-image`, {
             method: 'POST',
