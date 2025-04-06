@@ -331,12 +331,12 @@ async def image_to_image(
     file: UploadFile = File(...),
     prompt: str = Form(str),
     num_inference_steps: int = Form(2),
-    width: int = Form(512),
-    height: int = Form(512),
+    width: int = Form(128),
+    height: int = Form(128),
     negative_prompt: Optional[str] = Form(None),
     model_id: Optional[str] = Form(None),
     strength: float = Form(0.5),
-    guidance_scale: float = Form(2.0),
+    guidance_scale: float = Form(0.0),
     image_url: Optional[str] = Form(None),):
     """Generate image from input image and prompt using Stable Diffusion"""
     client = await get_sd_client()

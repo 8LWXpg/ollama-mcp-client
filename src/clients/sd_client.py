@@ -249,16 +249,28 @@ class SDClient(AbstractAsyncContextManager):
             job.progress = 0.1
 
             if image_data:
-                pil_img = self.bytes_to_pil(image_data)
-                # np_img = self.pil_to_numpy(pil_img)
-                # tensor_img = self.numpy_to_tensor(np_img)
-                # 確認 init_image 是有效圖像
-                init_image = load_image(pil_img).resize((request.width, request.height))
+                try:
+                    # Load image and explicitly convert to RGB
+                    pil_img = Image.open(io.BytesIO(image_data)).convert("RGB")
+                    self.logger.info(f"Original image size: {pil_img.size}, mode: {pil_img.mode}")
+                    
+                    # Check if image has actual content
+                    if pil_img.size[0] == 0 or pil_img.size[1] == 0:
+                        raise ValueError("Image has zero width or height")
+                        
+                    # Save a debug copy of the input image to verify it's valid
+                    # debug_path = os.path.join(self.output_dir, f"debug_input_{job_id}.png")
+                    # pil_img.save(debug_path)
+                    # self.logger.info(f"Saved debug image to {debug_path}")
+                    
+                    # Resize the image to the requested dimensions
+                    init_image = pil_img.resize((request.width, request.height))
+                except Exception as e:
+                    self.logger.error(f"Error processing input image: {e}")
+                    raise
             else:
                 raise ValueError("No input image provided")
             
-            
-
             job.progress = 0.2
 
             # Check if we need to load a different model
@@ -267,12 +279,12 @@ class SDClient(AbstractAsyncContextManager):
                 await asyncio.to_thread(self._load_specific_model, request.model_id, "img2img")
                 job.progress = 0.4
             
-            # Generate the image
+            # Generate the image - pass the PIL image directly
             self.logger.info(f"Job {job_id}: Generating image from input image with prompt: {request.prompt}")
             image = await asyncio.to_thread(
                 self._generate_image_to_image,
                 request.prompt,
-                init_image,
+                init_image,  # Pass the PIL image directly
                 request.num_inference_steps,
                 request.strength,
                 request.guidance_scale,
@@ -294,16 +306,19 @@ class SDClient(AbstractAsyncContextManager):
             job.status = "failed"
             job.error = str(e)
             self.logger.error(f"Error processing job {job_id}: {e}")
+            # Add traceback for more detailed error info
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
 
     def _load_specific_model(self, model_id: str, pipeline_type: str):
         """Load a specific model for a pipeline type"""
         if pipeline_type == "text2img":
             self.text2img_pipe = AutoPipelineForText2Image.from_pretrained(
-                model_id, torch_dtype=torch.float32, variant="fp16"
+                model_id, torch_dtype=torch.float32
             ).to(self.device)
         elif pipeline_type == "img2img":
             self.img2img_pipe = AutoPipelineForImage2Image.from_pretrained(
-                model_id, torch_dtype=torch.float32, variant="fp16"
+                model_id, torch_dtype=torch.float32
             ).to(self.device)
 
     def bytes_to_pil(self, image_bytes: bytes) -> Image.Image:
@@ -330,18 +345,26 @@ class SDClient(AbstractAsyncContextManager):
             height=height
         ).images[0]
 
-    def _generate_image_to_image(self, prompt, init_image, num_inference_steps, strength, guidance_scale, negative_prompt):
-        """Generate image from input image and text prompt (synchronous operation for thread)"""
-        if self.img2img_pipe is None:
-            raise ValueError("Image-to-image pipeline is not loaded")
-        return self.img2img_pipe(
+    def _generate_image_to_image(self, prompt, init_image, steps, strength, guidance_scale, negative_prompt=None):
+        """Generate image from input image using Stable Diffusion img2img pipeline"""
+        # Make sure init_image is a PIL image
+        if not isinstance(init_image, Image.Image):
+            raise TypeError(f"Expected PIL.Image, got {type(init_image)}")
+        
+        # Log image details for debugging
+        self.logger.info(f"Input image mode: {init_image.mode}, size: {init_image.size}")
+        
+        # Use the pipeline directly with the PIL image
+        output = self.img2img_pipe(
             prompt=prompt,
-            image=init_image,
-            negative_prompt=negative_prompt,
-            num_inference_steps=num_inference_steps,
+            image=init_image,  # Most pipelines accept PIL images directly
             strength=strength,
-            guidance_scale=guidance_scale
-        ).images[0]
+            guidance_scale=guidance_scale,
+            negative_prompt=negative_prompt,
+            num_inference_steps=steps
+        ).images[0]  # Get the first generated image
+        
+        return output  # This should be a PIL image ready to save
 
     def get_job_status(self, job_id: str) -> Optional[JobStatus]:
         """Get status of a specific job"""
