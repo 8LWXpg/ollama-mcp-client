@@ -1,17 +1,27 @@
 {
-    "test": {
-        "command": "uv",
-        "args": [
-            "run",
-            "server/server.py"
-        ]
+    "stdio": {
+        "test": {
+            "command": "uv",
+            "args": [
+                "run",
+                "server/server.py"
+            ]
+        },
+        "sqlite-test": {
+            "command": "uvx",
+            "args": [
+                "mcp-server-sqlite",
+                "--db-path",
+                "test.sqlite"
+            ]
+        }
     },
-    "sqlite-test": {
-        "command": "uvx",
-        "args": [
-            "mcp-server-sqlite",
-            "--db-path",
-            "test.sqlite"
-        ]
+    "sse": {
+        "sse-test": {
+            "url": "",
+            "headers": {
+                "test": "test"
+            }
+        }
     }
 }

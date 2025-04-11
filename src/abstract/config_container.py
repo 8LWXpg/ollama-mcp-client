@@ -1,25 +1,21 @@
 import json
-from typing import Self
+from typing import Any, Self
 from mcp import StdioServerParameters
-from pydantic import RootModel
+from pydantic import BaseModel
 
 
-class ConfigContainer(RootModel):
+class SSEParameters(BaseModel):
+    url: str
+    headers: dict[str, Any] | None = None
+
+
+class ConfigContainer(BaseModel):
     """
     Root model to represent the entire JSON structure with dynamic key.
     """
 
-    root: dict[str, StdioServerParameters]
-
-    def __getitem__(self, index: int) -> tuple:
-        if not self.root:
-            raise ValueError("No configurations found")
-
-        name = list(self.root.keys())[index]
-        return name, self.root[name]
-
-    def items(self):
-        return self.root.items()
+    stdio: dict[str, StdioServerParameters]
+    sse: dict[str, SSEParameters]
 
     @classmethod
     def form_file(cls, file_path: str) -> Self:
@@ -38,6 +34,6 @@ class ConfigContainer(RootModel):
             raise ValueError(f"Error reading file: {e}")
 
         try:
-            return cls(root=json_data)
+            return cls(**json_data)
         except Exception as e:
             raise ValueError(f"Error processing configuration: {e}")

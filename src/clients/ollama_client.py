@@ -77,8 +77,8 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         return client
 
     async def _connect_to_multiple_servers(self, config: ConfigContainer):
-        for name, params in config.items():
-            session, tools = await self._connect_to_server(name, params)
+        for name, params in config.stdio.items():
+            session, tools = await self._connect_stdio(name, params)
             self.servers[name] = Session(session=session, tools=[*tools])
 
         # Default to no select
@@ -88,7 +88,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             f"Connected to server with tools: {[cast(Tool.Function, tool.function).name for tool in self.get_tools()]}"
         )
 
-    async def _connect_to_server(
+    async def _connect_stdio(
         self, name: str, server_params: StdioServerParameters
     ) -> tuple[ClientSession, Sequence[Tool]]:
         """Connect to an MCP server
@@ -114,6 +114,8 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             )
             for tool in response.tools
         ]
+        for tool in response.tools:
+            self.logger.debug(json.dumps(tool.inputSchema))
         return (session, tools)
 
     def get_tools(self) -> list[Tool]:
