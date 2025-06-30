@@ -145,10 +145,8 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         #     {"role": "system", "content": prompt} for prompt in default_prompts
         # ]
 
-    async def process_message(self, message: str, model: str | None = None) -> AsyncIterator[ChatResponse]:
+    async def process_message(self, message: str, model: str = "qwen2.5:14b") -> AsyncIterator[ChatResponse]:
         """Process a query using LLM and available tools"""
-        if model is None:
-            model = "qwen2.5:14b"  # Predefined model
         self.messages.append({"role": "user", "content": message})
 
         async for part in self._recursive_prompt(model):
