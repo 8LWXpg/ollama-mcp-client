@@ -70,7 +70,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             return
 
     @classmethod
-    async def create(cls, config: ConfigContainer, host="http://192.168.0.33:11434") -> Self:
+    async def create(cls, config: ConfigContainer, host: str = "http://192.168.0.33:11434") -> Self:
         """Factory method to create and initialize a client instance"""
         client = cls(host)
         await client._connect_to_multiple_servers(config)
