@@ -5,7 +5,8 @@ import logging
 from abstract.api_response import ChatResponse
 from abstract.session import Session
 import colorlog
-
+from mcp.client.streamable_http import streamablehttp_client
+from typing import Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.types import TextContent
 from mcp.client.stdio import stdio_client
@@ -22,15 +23,16 @@ Always utilize tools to access real-time information when required.
 Engage in a friendly manner to enhance the chat experience.
 
 # Notes
-
+- Use English in every conversation.
 - Ensure responses are based on the latest information available from function calls.
 - Maintain an engaging, supportive, and friendly tone throughout the dialogue.
-- Always highlight the potential of available tools to assist users comprehensively."""
+- Always highlight the potential of available tools to assist users comprehensively.
+- Always pass the function rawly from the user, do not modify it. e.g if the user asks to get a config from 'L2 Cisco 2960X IB_1F', just pass it as is, do not change it to 'L2_Cisco_2960X_IB_1F'.
+"""
 
 
 class OllamaMCPClient(AbstractAsyncContextManager):
     def __init__(self, host: str | None = None):
-        # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
 
@@ -53,24 +55,31 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         if not self.logger.hasHandlers():
             self.logger.addHandler(console_handler)
 
-        # Initialize client objects
         self.client = AsyncClient(host)
         self.servers: dict[str, Session] = {}
         self.selected_server: dict[str, Session] = {}
         self.messages = []
         self.exit_stack = AsyncExitStack()
+        
+        self._http_connections: dict[str, tuple] = {}
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         try:
+            for server_name, (streams_context, session_context) in self._http_connections.items():
+                if session_context:
+                    await session_context.__aexit__(None, None, None)
+                if streams_context:
+                    await streams_context.__aexit__(None, None, None)
+            
             await self.exit_stack.aclose()
-        except ValueError:
+        except (ValueError, Exception):
             return
 
     @classmethod
-    async def create(cls, config: ConfigContainer, host="http://192.168.0.33:11434") -> Self:
+    async def create(cls, config: ConfigContainer, host="http://127.0.0.1:11434") -> Self:
         """Factory method to create and initialize a client instance"""
         client = cls(host)
         await client._connect_to_multiple_servers(config)
@@ -81,12 +90,46 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             session, tools = await self._connect_to_server(name, params)
             self.servers[name] = Session(session=session, tools=[*tools])
 
-        # Default to no select
         self.selected_server = self.servers
 
         self.logger.info(
-            f"Connected to server with tools: {[cast(Tool.Function, tool.function).name for tool in self.get_tools()]}"
+            f"Connected to stdio servers with tools: {[cast(Tool.Function, tool.function).name for tool in self.get_tools()]}"
         )
+
+    async def connect_to_streamable_http_server(self, server_url: str, headers: Optional[dict] = None, server_name: Optional[str] = None):
+        """Connect to an MCP server running with HTTP Streamable transport"""
+        if server_name is None:
+            server_name = f"http_{len(self._http_connections)}"
+        
+        streams_context = streamablehttp_client(url=server_url, headers=headers or {})
+        read_stream, write_stream, _ = await streams_context.__aenter__()
+
+        session_context = ClientSession(read_stream, write_stream)
+        session: ClientSession = await session_context.__aenter__()
+
+        await session.initialize()
+
+        self._http_connections[server_name] = (streams_context, session_context)
+
+        response = await session.list_tools()
+        tools = [
+            Tool(
+                type="function",
+                function=Tool.Function(
+                    name=f"{server_name}/{tool.name}",
+                    description=tool.description,
+                    parameters=cast(Tool.Function.Parameters, tool.inputSchema),
+                ),
+            )
+            for tool in response.tools
+        ]
+
+        self.servers[server_name] = Session(session=session, tools=tools)
+        
+        if not self.selected_server:
+            self.selected_server = {server_name: self.servers[server_name]}
+        else:
+            self.selected_server[server_name] = self.servers[server_name]
 
     async def _connect_to_server(
         self, name: str, server_params: StdioServerParameters
@@ -101,7 +144,6 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
         await session.initialize()
 
-        # List available tools
         response = await session.list_tools()
         tools = [
             Tool(
@@ -126,40 +168,26 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
     async def prepare_prompt(self):
         """Clear current message and create new one"""
-
-        # Get all prompt with name "default"
-        # all_prompts = [
-        #     (server, prompt)
-        #     for server in self.selected_server.values()
-        #     for prompt in (await server.session.list_prompts()).prompts
-        # ]
-        # default_prompts = [
-        #     cast(TextContent, (await server.session.get_prompt(prompt.name)).messages[0].content).text
-        #     for server, prompt in all_prompts
-        #     if prompt.name == "default"
-        # ]
         self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        # + [
-        #     {"role": "system", "content": prompt} for prompt in default_prompts
-        # ]
 
     async def process_message(self, message: str, model: str | None = None) -> AsyncIterator[ChatResponse]:
         """Process a query using LLM and available tools"""
         if model is None:
-            model = "qwen2.5:14b"  # Predefined model
+            model = "qwen2.5:3b"  # Predefined model
         self.messages.append({"role": "user", "content": message})
 
         async for part in self._recursive_prompt(model):
             yield part
 
     async def _recursive_prompt(self, model: str) -> AsyncIterator[ChatResponse]:
-        # self.logger.debug(f"message: {self.messages}")
-        # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
+        
+        available_tools = self.get_tools()
+        
         stream = await self.client.chat(
             model=model,
             messages=self.messages,
-            tools=self.get_tools(),
+            tools=available_tools,
             stream=True,
         )
 
@@ -183,19 +211,22 @@ class OllamaMCPClient(AbstractAsyncContextManager):
         messages: list[str] = []
         for tool in tool_calls:
             split = tool.function.name.split("/")
-            session = self.selected_server[split[0]].session
+            server_name = split[0]
             tool_name = split[1]
             tool_args = tool.function.arguments
 
-            # Execute tool call
+            if server_name in self.selected_server:
+                session = self.selected_server[server_name].session
+            else:
+                session = list(self.selected_server.values())[0].session
+
             try:
                 result = await session.call_tool(tool_name, dict(tool_args))
                 self.logger.debug(f"Tool call result: {result.content}")
                 message = f"tool: {tool.function.name}\nargs: {tool_args}\nreturn: {cast(TextContent, result.content[0]).text}"
             except Exception as e:
                 self.logger.debug(f"Tool call error: {e}")
-                message = f"Error in tool: {tool.function}\nargs: {tool_args}\n{e}"
+                message = f"Error in tool: {tool.function.name}\nargs: {tool_args}\n{e}"
 
-            # Continue conversation with tool results
             messages.append(message)
         return messages

@@ -18,6 +18,12 @@ uv venv
 uv pip install -e .
 ```
 
+Run the Streamable HTTP Server before running the client (The Streamable HTTP Server should run before the client running, or else the client will return error)
+```shell
+uv run httpserver/server.py
+```
+
+Run the Client
 ```shell
 uv run examples/ollama_example.py examples/server.json
 ```

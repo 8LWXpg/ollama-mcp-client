@@ -12,3 +12,4 @@ wheels/
 
 # test db
 *.sqlite
+.env
