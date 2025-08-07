@@ -20,5 +20,8 @@ line-length = 120
 docstring-code-format = true
 line-ending = 'lf'
 
+[tool.ruff.lint]
+extend-select = ["I"]
+
 [dependency-groups]
 dev = ["uvicorn[standard]>=0.34.0"]

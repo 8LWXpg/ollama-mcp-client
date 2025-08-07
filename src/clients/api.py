@@ -1,10 +1,11 @@
+import asyncio
 import json
+from contextlib import asynccontextmanager
+from typing import Optional
+
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import StreamingResponse
-import asyncio
 from pydantic import BaseModel
-from typing import Optional
-from contextlib import asynccontextmanager
 
 # Import your OllamaMCPClient from the original file
 from abstract.config_container import ConfigContainer
@@ -54,7 +55,7 @@ async def get_client():
 
 class ChatRequest(BaseModel):
     message: str
-    model: Optional[str] = "qwen2.5:14b"
+    model: str = "qwen2.5:14b"
 
 
 @app.post("/api/chat")

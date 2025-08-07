@@ -6,10 +6,11 @@
 # ]
 # ///
 
+import math
 import random
+
 import httpx
 from mcp.server.fastmcp import FastMCP
-import math
 
 # Initialize FastMCP server
 mcp = FastMCP("test")

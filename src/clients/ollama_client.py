@@ -1,18 +1,18 @@
-from contextlib import AbstractAsyncContextManager, AsyncExitStack
-from itertools import chain
 import json
 import logging
-from abstract.api_response import ChatResponse
-from abstract.session import Session
-import colorlog
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
+from itertools import chain
+from typing import AsyncIterator, Optional, Self, Sequence, cast
 
+import colorlog
 from mcp import ClientSession, StdioServerParameters
-from mcp.types import TextContent
 from mcp.client.stdio import stdio_client
-from typing import AsyncIterator, Self, Sequence, cast
+from mcp.types import TextContent
 from ollama import AsyncClient, Message, Tool
 
+from abstract.api_response import ChatResponse
 from abstract.config_container import ConfigContainer
+from abstract.session import Session
 
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat.
 Use the responses from these function calls to provide accurate and informative answers.
@@ -29,7 +29,7 @@ Engage in a friendly manner to enhance the chat experience.
 
 
 class OllamaMCPClient(AbstractAsyncContextManager):
-    def __init__(self, host: str | None = None):
+    def __init__(self, host: Optional[str] = None):
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
@@ -70,7 +70,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             return
 
     @classmethod
-    async def create(cls, config: ConfigContainer, host: str = "http://192.168.0.33:11434") -> Self:
+    async def create(cls, config: ConfigContainer, host: Optional[str] = None) -> Self:
         """Factory method to create and initialize a client instance"""
         client = cls(host)
         await client._connect_to_multiple_servers(config)
@@ -91,11 +91,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
     async def _connect_stdio(
         self, name: str, server_params: StdioServerParameters
     ) -> tuple[ClientSession, Sequence[Tool]]:
-        """Connect to an MCP server
-
-        Args:
-            server_script_path: Path to the server script (.py)
-        """
+        """Connect to an stdio MCP server"""
         stdio, write = await self.exit_stack.enter_async_context(stdio_client(server_params))
         session = cast(ClientSession, await self.exit_stack.enter_async_context(ClientSession(stdio, write)))
 
@@ -128,22 +124,7 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
     async def prepare_prompt(self):
         """Clear current message and create new one"""
-
-        # Get all prompt with name "default"
-        # all_prompts = [
-        #     (server, prompt)
-        #     for server in self.selected_server.values()
-        #     for prompt in (await server.session.list_prompts()).prompts
-        # ]
-        # default_prompts = [
-        #     cast(TextContent, (await server.session.get_prompt(prompt.name)).messages[0].content).text
-        #     for server, prompt in all_prompts
-        #     if prompt.name == "default"
-        # ]
         self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        # + [
-        #     {"role": "system", "content": prompt} for prompt in default_prompts
-        # ]
 
     async def process_message(self, message: str, model: str = "qwen2.5:14b") -> AsyncIterator[ChatResponse]:
         """Process a query using LLM and available tools"""
@@ -154,7 +135,6 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
     async def _recursive_prompt(self, model: str) -> AsyncIterator[ChatResponse]:
         # self.logger.debug(f"message: {self.messages}")
-        # Streaming does not work when provided with tools, that's the issue with API or ollama itself.
         self.logger.debug("Prompting")
         stream = await self.client.chat(
             model=model,
