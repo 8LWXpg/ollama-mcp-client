@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     # Startup: initialize the client
     global client_instance
     # You'll need to initialize your config here
-    config = ConfigContainer.form_file("examples/server.json")
+    config = ConfigContainer.from_file("examples/server.json")
     client_instance = await OllamaMCPClient.create(config)
 
     yield
@@ -45,7 +45,7 @@ async def get_client():
     async with client_lock:
         if client_instance is None:
             try:
-                config = ConfigContainer.form_file("examples/server.json")
+                config = ConfigContainer.from_file("examples/server.json")
                 client_instance = await OllamaMCPClient.create(config)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed to initialize client: {str(e)}")

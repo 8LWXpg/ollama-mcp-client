@@ -11,7 +11,7 @@ async def main():
         print("Usage: python client.py <path_to_server_config.json>")
         sys.exit(1)
 
-    config = ConfigContainer.form_file(sys.argv[1])
+    config = ConfigContainer.from_file(sys.argv[1])
     async with await OllamaMCPClient.create(config, "192.168.0.33:11434") as client:
         print("client initiated")
         print("\nMCP Client Started!")

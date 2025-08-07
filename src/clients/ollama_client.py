@@ -6,7 +6,9 @@ from typing import AsyncIterator, Optional, Self, Sequence, cast
 
 import colorlog
 from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamablehttp_client
 from mcp.types import TextContent
 from ollama import AsyncClient, Message, Tool
 
@@ -78,21 +80,25 @@ class OllamaMCPClient(AbstractAsyncContextManager):
 
     async def _connect_to_multiple_servers(self, config: ConfigContainer):
         for name, params in config.stdio.items():
-            session, tools = await self._connect_stdio(name, params)
+            session, tools = await self._connect_client(name, stdio_client(params))
+            self.servers[name] = Session(session=session, tools=[*tools])
+        for name, params in config.sse.items():
+            session, tools = await self._connect_client(name, sse_client(**params.model_dump()))
+            self.servers[name] = Session(session=session, tools=[*tools])
+        for name, params in config.streamable.items():
+            session, tools = await self._connect_client(name, streamablehttp_client(**params.model_dump()))
             self.servers[name] = Session(session=session, tools=[*tools])
 
-        # Default to no select
+        # Default to select all
         self.selected_server = self.servers
 
         self.logger.info(
             f"Connected to server with tools: {[cast(Tool.Function, tool.function).name for tool in self.get_tools()]}"
         )
 
-    async def _connect_stdio(
-        self, name: str, server_params: StdioServerParameters
-    ) -> tuple[ClientSession, Sequence[Tool]]:
+    async def _connect_client(self, name: str, client) -> tuple[ClientSession, Sequence[Tool]]:
         """Connect to an stdio MCP server"""
-        stdio, write = await self.exit_stack.enter_async_context(stdio_client(server_params))
+        stdio, write = await self.exit_stack.enter_async_context(client)
         session = cast(ClientSession, await self.exit_stack.enter_async_context(ClientSession(stdio, write)))
 
         await session.initialize()
@@ -110,8 +116,8 @@ class OllamaMCPClient(AbstractAsyncContextManager):
             )
             for tool in response.tools
         ]
-        for tool in response.tools:
-            self.logger.debug(json.dumps(tool.inputSchema))
+        # for tool in response.tools:
+        #     self.logger.debug(json.dumps(tool.inputSchema))
         return (session, tools)
 
     def get_tools(self) -> list[Tool]:

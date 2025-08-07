@@ -15,13 +15,5 @@
                 "test.sqlite"
             ]
         }
-    },
-    "sse": {
-        "sse-test": {
-            "url": "",
-            "headers": {
-                "test": "test"
-            }
-        }
     }
 }
