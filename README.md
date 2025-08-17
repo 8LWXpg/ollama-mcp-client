@@ -5,8 +5,6 @@ This is a simple [MCP](https://modelcontextprotocol.io) client that uses the Oll
 It follows the [MCP Client](https://modelcontextprotocol.io/tutorials/building-a-client) docs, but swaps out the
 Claude specific code for Ollama.
 
-Only supports stdio transport for now.
-
 ## Usage
 
 Install the package in development mode:
