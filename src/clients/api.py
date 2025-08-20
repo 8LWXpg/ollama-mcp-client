@@ -65,6 +65,7 @@ async def stream_chat(request: ChatRequest):
     iter = client.process_message(request.message, request.model)
     first_chunk = None
 
+    # If we don't do this, response will return 200 before timeout
     async def response_generator():
         if first_chunk:
             yield json.dumps(first_chunk)
