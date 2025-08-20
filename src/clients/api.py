@@ -1,7 +1,6 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import StreamingResponse
@@ -26,7 +25,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: cleanup the client
+    # Shutdown: clean up the client
     if client_instance:
         await client_instance.__aexit__(None, None, None)
 
@@ -65,7 +64,6 @@ async def stream_chat(request: ChatRequest):
     iter = client.process_message(request.message, request.model)
     first_chunk = None
 
-    # If we don't do this, response will return 200 before timeout
     async def response_generator():
         if first_chunk:
             yield json.dumps(first_chunk)
@@ -74,6 +72,7 @@ async def stream_chat(request: ChatRequest):
             await asyncio.sleep(0.01)
 
     try:
+        # We do this so it waits before returning 200, and this throws when timeout
         first_chunk = await iter.__anext__()
         return StreamingResponse(
             response_generator(),
